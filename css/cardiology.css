@@ -1,0 +1,165 @@
+/**
+ * cardiology.css
+ *
+ * Styles for the Cardiology container form.
+ * All visual rules are here; no inline styles are used in PHP templates.
+ *
+ * Compatible with the OpenEMR Bootstrap 4/5 theme used in versions 8.2-8.5.
+ */
+
+/* ==========================================================================
+   Container wrapper
+   ========================================================================== */
+
+.cardiology-container {
+    max-width: 1400px;
+}
+
+/* ==========================================================================
+   Header bar
+   ========================================================================== */
+
+.cardiology-header {
+    border-bottom: 1px solid var(--border-color, #dee2e6);
+}
+
+.cardiology-header-meta {
+    font-size: 0.875rem;
+}
+
+/* ==========================================================================
+   Section titles
+   ========================================================================== */
+
+.cardiology-section-title {
+    font-weight: 600;
+    border-left: 4px solid #e74c3c;
+    padding-left: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+/* ==========================================================================
+   Card grid tiles
+   ========================================================================== */
+
+.cardiology-card-tile {
+    border: 1px solid rgba(0, 0, 0, 0.125);
+    border-radius: 0.375rem;
+    transition: box-shadow 0.15s ease-in-out;
+}
+
+.cardiology-card-tile:not(.cardiology-card-disabled):hover {
+    box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.1);
+}
+
+.cardiology-card-disabled {
+    opacity: 0.55;
+    background-color: var(--light, #f8f9fa);
+    cursor: not-allowed;
+}
+
+.cardiology-card-header {
+    background-color: var(--primary, #007bff);
+    color: #fff;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+    border-top-left-radius: calc(0.375rem - 1px);
+    border-top-right-radius: calc(0.375rem - 1px);
+    font-size: 0.95rem;
+}
+
+.cardiology-card-disabled .cardiology-card-header {
+    background-color: #6c757d;
+}
+
+.cardiology-card-body {
+    padding: 0.75rem;
+    font-size: 0.875rem;
+}
+
+/* "New" button inside the card header */
+.cardiology-btn-new {
+    font-size: 0.75rem;
+    padding: 0.15rem 0.5rem;
+    border-color: rgba(255, 255, 255, 0.7);
+    color: #fff;
+}
+
+.cardiology-btn-new:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-color: #fff;
+    color: #fff;
+}
+
+/* ==========================================================================
+   Study list inside a card tile
+   ========================================================================== */
+
+.cardiology-study-list {
+    font-size: 0.8rem;
+}
+
+.cardiology-study-item {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    padding: 0.2rem 0;
+    gap: 0.4rem;
+}
+
+.cardiology-study-item:last-child {
+    border-bottom: none;
+}
+
+.cardiology-study-date {
+    min-width: 6rem;
+    flex-shrink: 0;
+}
+
+.cardiology-badge {
+    font-size: 0.7rem;
+    flex-shrink: 0;
+}
+
+/* Extra-small buttons for study actions */
+.btn-xs {
+    padding: 0.1rem 0.35rem;
+    font-size: 0.7rem;
+    line-height: 1.4;
+    border-radius: 0.2rem;
+}
+
+/* ==========================================================================
+   Report view (encounter summary)
+   ========================================================================== */
+
+.cardiology-report {
+    font-size: 0.875rem;
+    margin-bottom: 0.5rem;
+}
+
+.cardiology-report-row {
+    margin-bottom: 0.25rem;
+}
+
+.cardiology-report-label {
+    font-weight: 600;
+    margin-right: 0.4rem;
+}
+
+.cardiology-report-card {
+    border-left: 3px solid #e74c3c;
+    padding-left: 0.5rem;
+}
+
+.cardiology-report-study {
+    margin-bottom: 0.15rem;
+}
+
+/* ==========================================================================
+   Config page
+   ========================================================================== */
+
+.cardiology-config-table th,
+.cardiology-config-table td {
+    vertical-align: middle;
+}
+
