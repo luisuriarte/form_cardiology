@@ -18,6 +18,8 @@
  * @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
  */
 
+declare(strict_types=1);
+
 require_once('../../../../globals.php');
 require_once($GLOBALS['srcdir'] . '/api.inc.php');
 require_once($GLOBALS['srcdir'] . '/forms.inc.php');
@@ -39,11 +41,9 @@ if (!AclMain::aclCheckCore('patients', 'med')) {
 // ---------------------------------------------------------------------------
 // Resolve parameters
 // ---------------------------------------------------------------------------
-/** @var int $pid */
-/** @var int $encounter */
 $cardiologyId = (int)($_GET['cardiology_id'] ?? 0);
-$pid          = (int)($_GET['pid']           ?? $pid);
-$encounter    = (int)($_GET['encounter']     ?? $encounter);
+$pid          = (int)($_GET['pid']           ?? $GLOBALS['pid'] ?? 0);
+$encounter    = (int)($_GET['encounter']     ?? $GLOBALS['encounter'] ?? 0);
 
 if ($cardiologyId <= 0 || $pid <= 0 || $encounter <= 0) {
     die(xlt('Missing required parameters.'));
@@ -56,9 +56,9 @@ if ($container === null) {
 }
 
 // ---------------------------------------------------------------------------
-// Load list options used by this form
+// Load list options
 // ---------------------------------------------------------------------------
-function echoGetListOptions(string $listId): array
+function echoLoadList(string $listId): array
 {
     $opts = [];
     $res  = sqlStatement(
@@ -73,12 +73,12 @@ function echoGetListOptions(string $listId): array
     return $opts;
 }
 
-$valveGrades    = echoGetListOptions('card_valve_grade');
-$wallMotions    = echoGetListOptions('card_wall_motion');
-$effusionGrades = echoGetListOptions('card_effusion_grade');
-$efMethods      = echoGetListOptions('card_ef_method');
+$valveGrades    = echoLoadList('card_valve_grade');
+$wallMotions    = echoLoadList('card_wall_motion');
+$effusionGrades = echoLoadList('card_effusion_grade');
+$efMethods      = echoLoadList('card_ef_method');
 
-// New form: empty study, never read-only
+// New study: no existing data
 $study    = null;
 $readOnly = false;
 ?>
@@ -119,7 +119,7 @@ $readOnly = false;
         <input type="hidden" name="pid"           value="<?php echo attr((string)$pid); ?>">
         <input type="hidden" name="encounter"     value="<?php echo attr((string)$encounter); ?>">
         <input type="hidden" name="cardiology_id" value="<?php echo attr((string)$cardiologyId); ?>">
-        <input type="hidden" name="study_id"      value=""><!-- 0 = new -->
+        <input type="hidden" name="study_id"      value="0">
 
         <?php require __DIR__ . '/_form_fields.php'; ?>
 
@@ -132,10 +132,11 @@ $readOnly = false;
                 </button>
                 <button type="submit" name="action" value="save_final"
                         class="btn btn-success ms-2"
-                        onclick="if(!confirm(<?php echo xlj('Finalize this study? It will become read-only.'); ?>)){return false;} top.restoreSession();">
+                        onclick="return confirm(<?php echo xlj('Finalize this study? It will become read-only.'); ?>)">
                     <?php echo xlt('Finalize'); ?>
                 </button>
-                <a href="<?php echo attr($GLOBALS['rootdir']); ?>/forms/cardiology/view.php?id=<?php echo attr_url((string)$cardiologyId); ?>"
+                <a href="<?php echo attr($GLOBALS['rootdir']
+                    . '/forms/cardiology/view.php?id=' . urlencode((string)$cardiologyId)); ?>"
                    class="btn btn-secondary ms-2"
                    onclick="top.restoreSession()">
                     <?php echo xlt('Cancel'); ?>
@@ -145,7 +146,6 @@ $readOnly = false;
     </form>
 
 </div><!-- .cardiology-container -->
-
 <script src="<?php echo attr($GLOBALS['webroot']); ?>/interface/forms/cardiology/cards/echo/echo.js?v=<?php echo attr($GLOBALS['v_js_includes']); ?>"></script>
 </body>
 </html>

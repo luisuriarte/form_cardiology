@@ -216,7 +216,184 @@ INSERT IGNORE INTO lang_custom (lang_description, lang_code, constant_name, defi
 ('Spanish (Latin American)', 'el', 'Negative for ischemia',                 'Negativa para isquemia'),
 ('Spanish (Latin American)', 'el', 'Positive for ischemia',                 'Positiva para isquemia'),
 ('Spanish (Latin American)', 'el', 'Inconclusive',                          'No concluyente'),
-('Spanish (Latin American)', 'el', 'Submaximal (target not reached)',        'Submáxima (objetivo no alcanzado)')
+('Spanish (Latin American)', 'el', 'Submaximal (target not reached)',        'Submáxima (objetivo no alcanzado)'),
+
+-- --------------------------------------------------------------------------
+-- Stress Test card – títulos de página y navegación
+-- --------------------------------------------------------------------------
+('Spanish (Latin American)', 'el', 'Exercise Stress Test – New Study',      'Ergometría – Nuevo Estudio'),
+('Spanish (Latin American)', 'el', 'Exercise Stress Test – View Study',     'Ergometría – Ver Estudio'),
+('Spanish (Latin American)', 'el', 'Exercise Stress Test Report',           'Informe de Ergometría'),
+('Spanish (Latin American)', 'el', 'Study not found or has been deleted.',  'Estudio no encontrado o eliminado.'),
+('Spanish (Latin American)', 'el', 'This study is finalized and cannot be edited.',
+                                                                            'Este estudio está finalizado y no puede editarse.'),
+('Spanish (Latin American)', 'el', 'Study Date',                            'Fecha del Estudio'),
+('Spanish (Latin American)', 'el', 'Physician',                             'Médico'),
+('Spanish (Latin American)', 'el', 'Finalized',                             'Finalizado'),
+('Spanish (Latin American)', 'el', 'by',                                    'por'),
+('Spanish (Latin American)', 'el', 'Study ID',                              'ID del Estudio'),
+('Spanish (Latin American)', 'el', 'Study',                                 'Estudio'),
+('Spanish (Latin American)', 'el', 'Back',                                  'Volver'),
+('Spanish (Latin American)', 'el', 'Print',                                 'Imprimir'),
+('Spanish (Latin American)', 'el', 'Report generated',                      'Informe generado'),
+
+-- --------------------------------------------------------------------------
+-- Stress Test card – sección Contexto Clínico
+-- --------------------------------------------------------------------------
+('Spanish (Latin American)', 'el', 'Clinical Context',                      'Contexto Clínico'),
+('Spanish (Latin American)', 'el', 'Indication',                            'Indicación'),
+('Spanish (Latin American)', 'el', 'Age (years)',                           'Edad (años)'),
+('Spanish (Latin American)', 'el', 'Height (cm)',                           'Talla (cm)'),
+('Spanish (Latin American)', 'el', 'Weight (kg)',                           'Peso (kg)'),
+('Spanish (Latin American)', 'el', 'On beta-blocker',                       'Bajo betabloqueante'),
+('Spanish (Latin American)', 'el', 'Medications',                           'Medicaciones'),
+('Spanish (Latin American)', 'el', 'Protocol',                              'Protocolo'),
+('Spanish (Latin American)', 'el', 'Resting ECG Findings',                  'ECG de reposo'),
+('Spanish (Latin American)', 'el', 'Indication for the test',              'Indicación del estudio'),
+('Spanish (Latin American)', 'el', 'Relevant medications at study time',    'Medicaciones relevantes al momento del estudio'),
+('Spanish (Latin American)', 'el', 'ECG findings before the test',          'Hallazgos en el ECG previo a la prueba'),
+
+-- --------------------------------------------------------------------------
+-- Stress Test card – sección Valores Basales
+-- --------------------------------------------------------------------------
+('Spanish (Latin American)', 'el', 'Baseline Values',                       'Valores Basales'),
+('Spanish (Latin American)', 'el', 'Resting HR (bpm)',                      'FC en reposo (lpm)'),
+('Spanish (Latin American)', 'el', 'Resting BP Systolic (mmHg)',            'PAS en reposo (mmHg)'),
+('Spanish (Latin American)', 'el', 'Resting BP Diastolic (mmHg)',           'PAD en reposo (mmHg)'),
+
+-- --------------------------------------------------------------------------
+-- Stress Test card – sección Performance
+-- --------------------------------------------------------------------------
+('Spanish (Latin American)', 'el', 'Exercise Performance',                  'Rendimiento al Esfuerzo'),
+('Spanish (Latin American)', 'el', 'Max Predicted HR',                      'FC Máxima Predicha'),
+('Spanish (Latin American)', 'el', 'Calculated: 220 - age',                 'Calculado: 220 - edad'),
+('Spanish (Latin American)', 'el', 'Target HR (85%)',                       'FC Objetivo (85%)'),
+('Spanish (Latin American)', 'el', 'Calculated: 85% of max predicted HR',   'Calculado: 85% de la FC máxima predicha'),
+('Spanish (Latin American)', 'el', 'Peak HR (bpm)',                         'FC Pico (lpm)'),
+('Spanish (Latin American)', 'el', 'Peak HR % Predicted',                   'FC Pico % de Predicha'),
+('Spanish (Latin American)', 'el', 'Calculated: peak HR / max predicted × 100',
+                                                                            'Calculado: FC pico / FC máx predicha × 100'),
+('Spanish (Latin American)', 'el', 'Peak BP Sys. (mmHg)',                   'PAS Pico (mmHg)'),
+('Spanish (Latin American)', 'el', 'Peak BP Dia. (mmHg)',                   'PAD Pico (mmHg)'),
+('Spanish (Latin American)', 'el', 'Double Product',                        'Doble Producto'),
+('Spanish (Latin American)', 'el', 'Calculated: peak HR × peak systolic BP','Calculado: FC pico × PAS pico'),
+('Spanish (Latin American)', 'el', 'Exercise Duration (s)',                  'Duración del Esfuerzo (s)'),
+('Spanish (Latin American)', 'el', 'METs Achieved',                         'METs Alcanzados'),
+('Spanish (Latin American)', 'el', 'BP Response',                           'Respuesta Tensional'),
+('Spanish (Latin American)', 'el', 'HR Recovery 1 min',                     'Recuperación FC 1 min'),
+
+-- --------------------------------------------------------------------------
+-- Stress Test card – sección Síntomas, ST y Arritmias
+-- --------------------------------------------------------------------------
+('Spanish (Latin American)', 'el', 'Symptoms, ST Segment & Arrhythmias',    'Síntomas, Segmento ST y Arritmias'),
+('Spanish (Latin American)', 'el', 'Main Symptom',                          'Síntoma Principal'),
+('Spanish (Latin American)', 'el', 'Angina Index',                          'Índice de Angina'),
+('Spanish (Latin American)', 'el', 'Non-limiting',                          'No limitante'),
+('Spanish (Latin American)', 'el', 'Test-limiting',                         'Limitante de la prueba'),
+('Spanish (Latin American)', 'el', 'ST Depression (mm)',                    'Depresión del ST (mm)'),
+('Spanish (Latin American)', 'el', 'ST Elevation (mm)',                     'Elevación del ST (mm)'),
+('Spanish (Latin American)', 'el', 'ST Leads',                              'Derivaciones del ST'),
+('Spanish (Latin American)', 'el', 'ST Onset HR (bpm)',                     'FC de inicio de cambios ST (lpm)'),
+('Spanish (Latin American)', 'el', 'Arrhythmias',                           'Arritmias'),
+('Spanish (Latin American)', 'el', 'e.g. V4-V6',                            'p.ej. V4-V6'),
+('Spanish (Latin American)', 'el', 'Arrhythmias observed during exercise or recovery',
+                                                                            'Arritmias observadas durante el esfuerzo o la recuperación'),
+
+-- --------------------------------------------------------------------------
+-- Stress Test card – sección Resultado
+-- --------------------------------------------------------------------------
+('Spanish (Latin American)', 'el', 'Result',                                'Resultado'),
+('Spanish (Latin American)', 'el', 'Stop Reason',                           'Motivo de Detención'),
+('Spanish (Latin American)', 'el', 'Duke Score',                            'Puntaje de Duke'),
+('Spanish (Latin American)', 'el', 'Calculated: min - 5×ST_depression - 4×angina_index',
+                                                                            'Calculado: min - 5×dep. ST - 4×índice de angina'),
+('Spanish (Latin American)', 'el', 'Duke Risk',                             'Riesgo de Duke'),
+('Spanish (Latin American)', 'el', 'Overall Result',                        'Resultado Global'),
+('Spanish (Latin American)', 'el', 'Low risk',                              'Riesgo bajo'),
+('Spanish (Latin American)', 'el', 'Intermediate risk',                     'Riesgo intermedio'),
+('Spanish (Latin American)', 'el', 'High risk',                             'Riesgo alto'),
+('Spanish (Latin American)', 'el', 'Study conclusion for the PDF report',   'Conclusión del estudio para el informe PDF'),
+('Spanish (Latin American)', 'el', 'Additional comments or recommendations','Comentarios adicionales o recomendaciones'),
+
+-- --------------------------------------------------------------------------
+-- Stress Test card – tabla de etapas
+-- --------------------------------------------------------------------------
+('Spanish (Latin American)', 'el', 'Stage-by-Stage Records',                'Registro por Etapas'),
+('Spanish (Latin American)', 'el', 'Add Stage',                             'Agregar Etapa'),
+('Spanish (Latin American)', 'el', 'No stages recorded.',                   'No se registraron etapas.'),
+('Spanish (Latin American)', 'el', 'Phase',                                 'Fase'),
+('Spanish (Latin American)', 'el', 'Stage',                                 'Etapa'),
+('Spanish (Latin American)', 'el', 'Elapsed (s)',                           'Tiempo (s)'),
+('Spanish (Latin American)', 'el', 'Speed (km/h)',                          'Velocidad (km/h)'),
+('Spanish (Latin American)', 'el', 'Grade (%)',                             'Pendiente (%)'),
+('Spanish (Latin American)', 'el', 'BP Sys',                                'PAS'),
+('Spanish (Latin American)', 'el', 'BP Dia',                                'PAD'),
+('Spanish (Latin American)', 'el', 'Rest',                                  'Reposo'),
+('Spanish (Latin American)', 'el', 'Exercise',                              'Esfuerzo'),
+('Spanish (Latin American)', 'el', 'Recovery',                              'Recuperación'),
+('Spanish (Latin American)', 'el', 'Remove stage',                          'Eliminar etapa'),
+
+-- --------------------------------------------------------------------------
+-- Echo card – títulos de página y navegación
+-- --------------------------------------------------------------------------
+('Spanish (Latin American)', 'el', 'Echocardiogram – New Study',            'Ecocardiograma – Nuevo Estudio'),
+('Spanish (Latin American)', 'el', 'Echocardiogram – View Study',           'Ecocardiograma – Ver Estudio'),
+('Spanish (Latin American)', 'el', 'Echocardiogram Report',                 'Informe de Ecocardiograma'),
+('Spanish (Latin American)', 'el', 'Doppler Echocardiogram Report',         'Informe de Ecocardiograma Doppler'),
+
+-- --------------------------------------------------------------------------
+-- Echo card – secciones del formulario y columnas del informe
+-- --------------------------------------------------------------------------
+('Spanish (Latin American)', 'el', 'Left Ventricle – Dimensions & Systolic Function',
+                                                                            'Ventrículo Izquierdo – Dimensiones y Función Sistólica'),
+('Spanish (Latin American)', 'el', 'Left Ventricle – Diastolic Function',   'Ventrículo Izquierdo – Función Diastólica'),
+('Spanish (Latin American)', 'el', 'Atria',                                 'Aurículas'),
+('Spanish (Latin American)', 'el', 'Right Ventricle & Pulmonary Pressure',  'Ventrículo Derecho y Presión Pulmonar'),
+('Spanish (Latin American)', 'el', 'Aorta',                                 'Aorta'),
+('Spanish (Latin American)', 'el', 'Valves',                                'Válvulas'),
+('Spanish (Latin American)', 'el', 'Pericardium',                           'Pericardio'),
+('Spanish (Latin American)', 'el', 'Report',                                'Informe'),
+('Spanish (Latin American)', 'el', 'Aortic Valve',                          'Válvula Aórtica'),
+('Spanish (Latin American)', 'el', 'Mitral Valve',                          'Válvula Mitral'),
+('Spanish (Latin American)', 'el', 'Tricuspid & Pulmonary Valves',          'Válvulas Tricuspídea y Pulmonar'),
+('Spanish (Latin American)', 'el', 'LVEF Method',                           'Método de FEVI'),
+('Spanish (Latin American)', 'el', 'Global Wall Motion',                    'Motilidad Global'),
+('Spanish (Latin American)', 'el', 'Segmental Wall Motion Detail',          'Detalle de Motilidad Segmentaria'),
+('Spanish (Latin American)', 'el', 'Additional Valve Findings',             'Otros Hallazgos Valvulares'),
+('Spanish (Latin American)', 'el', 'Pericardial Effusion',                  'Derrame Pericárdico'),
+('Spanish (Latin American)', 'el', 'Height (cm)',                           'Talla (cm)'),
+('Spanish (Latin American)', 'el', 'Weight (kg)',                           'Peso (kg)'),
+('Spanish (Latin American)', 'el', 'BSA (m²)',                              'SCT (m²)'),
+('Spanish (Latin American)', 'el', 'Heart Rate',                            'Frecuencia Cardíaca'),
+('Spanish (Latin American)', 'el', 'BP',                                    'TA'),
+('Spanish (Latin American)', 'el', 'BSA',                                   'SCT'),
+('Spanish (Latin American)', 'el', 'LV Mass',                               'Masa del VI'),
+('Spanish (Latin American)', 'el', 'LV Mass Index',                         'Índice de Masa del VI'),
+('Spanish (Latin American)', 'el', 'Wall Motion',                           'Motilidad Parietal'),
+('Spanish (Latin American)', 'el', 'Detail',                                'Detalle'),
+('Spanish (Latin American)', 'el', 'Dec. Time',                             'Tiempo de desaceleración'),
+('Spanish (Latin American)', 'el', 'LA Diameter',                           'Diámetro AI'),
+('Spanish (Latin American)', 'el', 'LA Volume Index',                       'Índice de Vol. AI'),
+('Spanish (Latin American)', 'el', 'RA Area',                               'Área AD'),
+('Spanish (Latin American)', 'el', 'RV Basal Diam.',                        'Diám. Basal VD'),
+('Spanish (Latin American)', 'el', 'Aortic Root',                           'Raíz Aórtica'),
+('Spanish (Latin American)', 'el', 'Ascending Aorta',                       'Aorta Ascendente'),
+('Spanish (Latin American)', 'el', 'Valve',                                 'Válvula'),
+('Spanish (Latin American)', 'el', 'Regurgitation',                         'Regurgitación'),
+('Spanish (Latin American)', 'el', 'Stenosis',                              'Estenosis'),
+('Spanish (Latin American)', 'el', 'Peak Vel. (m/s)',                       'Vel. pico (m/s)'),
+('Spanish (Latin American)', 'el', 'Mean Grad. (mmHg)',                     'Grad. medio (mmHg)'),
+('Spanish (Latin American)', 'el', 'Area (cm²)',                            'Área (cm²)'),
+('Spanish (Latin American)', 'el', 'Aortic',                                'Aórtica'),
+('Spanish (Latin American)', 'el', 'Mitral',                                'Mitral'),
+('Spanish (Latin American)', 'el', 'Tricuspid',                             'Tricuspídea'),
+('Spanish (Latin American)', 'el', 'Pulmonary',                             'Pulmonar'),
+('Spanish (Latin American)', 'el', 'Method',                                'Método'),
+('Spanish (Latin American)', 'el', 'Conclusion',                            'Conclusión'),
+('Spanish (Latin American)', 'el', 'Comments',                              'Comentarios'),
+('Spanish (Latin American)', 'el', 'DOB',                                   'Fecha de Nac.'),
+('Spanish (Latin American)', 'el', 'Sex',                                   'Sexo'),
+('Spanish (Latin American)', 'el', 'Status',                                'Estado')
 
 ; -- fin del INSERT IGNORE
 

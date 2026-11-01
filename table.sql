@@ -213,9 +213,9 @@ CREATE TABLE IF NOT EXISTS `form_card_echo` (
   `comments` TEXT COMMENT 'Additional comments or recommendations',
 
   PRIMARY KEY (`id`),
-  KEY `idx_pid_study_date` (`pid`, `study_date`),   -- evolution charts by patient
-  KEY `idx_cardiology_id` (`cardiology_id`),        -- load cards of a container
-  KEY `idx_pid_encounter` (`pid`, `encounter`)      -- load studies of an encounter
+  KEY `idx_pid_study_date` (`pid`, `study_date`),
+  KEY `idx_cardiology_id` (`cardiology_id`),
+  KEY `idx_pid_encounter` (`pid`, `encounter`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   COMMENT='Doppler echocardiogram study (one row per study)';
 
@@ -303,9 +303,9 @@ CREATE TABLE IF NOT EXISTS `form_card_stress_test` (
   `comments` TEXT COMMENT 'Additional comments or recommendations',
 
   PRIMARY KEY (`id`),
-  KEY `idx_pid_study_date` (`pid`, `study_date`),   -- evolution charts by patient
-  KEY `idx_cardiology_id` (`cardiology_id`),        -- load cards of a container
-  KEY `idx_pid_encounter` (`pid`, `encounter`)      -- load studies of an encounter
+  KEY `idx_pid_study_date` (`pid`, `study_date`),
+  KEY `idx_cardiology_id` (`cardiology_id`),
+  KEY `idx_pid_encounter` (`pid`, `encounter`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   COMMENT='Exercise stress test study (one row per study)';
 
@@ -327,7 +327,7 @@ CREATE TABLE IF NOT EXISTS `form_card_stress_test_stage` (
   `st_mm` DECIMAL(3,1) DEFAULT NULL COMMENT 'ST segment level at the end of the stage, mm (negative = depression)',
   `symptom_note` VARCHAR(255) DEFAULT NULL COMMENT 'Symptoms or findings noted in the stage, free text',
   PRIMARY KEY (`id`),
-  KEY `idx_stress_test_id` (`stress_test_id`, `elapsed_s`)  -- load and plot stages in order
+  KEY `idx_stress_test_id` (`stress_test_id`, `elapsed_s`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   COMMENT='Stage-by-stage records of an exercise stress test';
 
