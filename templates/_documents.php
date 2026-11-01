@@ -24,7 +24,6 @@
 declare(strict_types=1);
 
 use OpenEMR\Common\Acl\AclMain;
-use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Forms\Cardiology\CardDocuments;
 use OpenEMR\Forms\Cardiology\CardRegistry;
 use OpenEMR\Forms\Cardiology\CardiologyContainer;
@@ -68,7 +67,7 @@ $isFinal     = ($studyStatus === 'final');
 $finalizedAt = (string)($study['finalized_at'] ?? '');
 
 $attachments = CardDocuments::listForStudy($cardCode, $studyId, $pid);
-$csrfToken   = CsrfUtils::collectCsrfToken();
+$csrfToken   = CardiologyContainer::collectCsrfToken();
 $apiUrl      = CardiologyContainer::getFormRootUrl() . '/documents_api.php';
 $retrieveUrlBase = $GLOBALS['webroot'] . '/controller.php?document&retrieve&patient_id=' . urlencode((string)$pid) . '&as_file=false&document_id=';
 $maxUploadBytes = CardDocuments::getMaxUploadBytes();

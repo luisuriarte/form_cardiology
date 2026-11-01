@@ -29,7 +29,7 @@ final class CardCharts
      * Maximum number of historical studies to plot in longitudinal charts.
      * The clinic can change this between 10 and 200 from the settings screen.
      */
-    private function maxStudies(): int
+    private static function maxStudies(): int
     {
         return CardSettings::getClinicInt('chart_max_studies');
     }
@@ -123,7 +123,7 @@ final class CardCharts
 
         // Fetch a bounded number of studies: final ones plus the current
         // study when it is still open. The clinic controls the bound.
-        $maxStudies = $this->maxStudies();
+        $maxStudies = self::maxStudies();
         if ($currentStudyId !== null && $currentStudyId > 0) {
             $sql = "SELECT {$columnSql} FROM {$escapedTable}
                     WHERE pid = ? AND activity = 1 AND (status = 'final' OR id = ?)
