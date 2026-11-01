@@ -19,7 +19,7 @@ START TRANSACTION;
 -- de las instalaciones de OpenEMR. Descomentarla sólo si es necesario.
 -- INSERT IGNORE INTO lang_languages (lang_code, lang_description)
 -- SELECT 'el', 'Spanish (Latin American)'
--- WHERE NOT EXISTS (SELECT 1 FROM lang_languages WHERE lang_code = 'el');
+-- WHERE NOT EXISTS (SELECT 1 FROM lang_languages WHERE lang_code = 'el')
 
 -- ============================================================================
 -- 2. Insertar traducciones en lang_custom (INSERT IGNORE = no sobreescribe)
@@ -163,7 +163,7 @@ INSERT IGNORE INTO lang_custom (lang_description, lang_code, constant_name, defi
 -- --------------------------------------------------------------------------
 -- card_effusion_grade  (grado de derrame pericárdico)
 -- --------------------------------------------------------------------------
--- 'None' y 'Trace' y 'Mild' y 'Moderate' ya están arriba; sólo se agrega 'Large'
+-- 'None' y 'Trace' y 'Mild' y 'Moderate' ya están arriba, sólo se agrega 'Large'
 ('Spanish (Latin American)', 'el', 'Large',                                 'Abundante'),
 
 -- --------------------------------------------------------------------------
@@ -395,7 +395,7 @@ INSERT IGNORE INTO lang_custom (lang_description, lang_code, constant_name, defi
 ('Spanish (Latin American)', 'el', 'Sex',                                   'Sexo'),
 ('Spanish (Latin American)', 'el', 'Status',                                'Estado')
 
-; -- fin del INSERT IGNORE
+;
 
 -- ============================================================================
 -- 3. Sincronizar lang_custom → lang_constants (agregar strings fuente faltantes)

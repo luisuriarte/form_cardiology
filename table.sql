@@ -45,7 +45,7 @@ CREATE TABLE IF NOT EXISTS `card_modules` (
 
 -- -----------------------------------------------------------------------------
 -- Per-user activation of cards
--- user_id = 0 is the clinic default; a row with a real user id overrides it
+-- user_id = 0 is the clinic default, a row with a real user id overrides it
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `card_config` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
