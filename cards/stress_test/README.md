@@ -53,7 +53,7 @@ or editing a study.
 
 ## How to install this card
 
-1. Copy this directory to `interface/forms/cardiology/cards/stress_test/`.
+1. Copy this directory to `interface/forms/form_cardiology/cards/stress_test/`.
 2. Create the four PHP files listed above.
 3. The container will automatically detect the card as "installed" and enable
    the **New** button on the card tile.

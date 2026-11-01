@@ -46,7 +46,7 @@ an existing one to be edited.
 
 ## How to install this card
 
-1. Copy this directory to `interface/forms/cardiology/cards/echo/`.
+1. Copy this directory to `interface/forms/form_cardiology/cards/echo/`.
 2. Create the four PHP files listed above.
 3. The container will automatically detect the card as "installed" and enable
    the **New** button on the card tile.

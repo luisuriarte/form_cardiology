@@ -40,8 +40,8 @@ class CardiologyContainer
     /** Name registered in the forms table. Must match info.txt. */
     public const FORM_NAME = 'Cardiology';
 
-    /** formdir registered in the forms table. Must match the folder name. */
-    public const FORM_DIR = 'cardiology';
+    /** formdir registered in the forms table. Must match the folder name ("form_cardiology"). */
+    public const FORM_DIR = 'form_cardiology';
 
     /** Table that holds the container rows. */
     public const TABLE = 'form_cardiology';

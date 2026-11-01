@@ -89,9 +89,23 @@ foreach ($cards as $card) {
         continue;
     }
 
+    // Validate table name format against whitelist regex. Skip card if invalid.
+    if (!preg_match('/^form_card_[a-z0-9_]+$/', $tableName)) {
+        $studyCounts[$code] = 0;
+        $studies[$code]     = [];
+        continue;
+    }
+
+    $safeTable = escape_table_name($tableName);
+    if (!$safeTable || $safeTable === '``') {
+        $studyCounts[$code] = 0;
+        $studies[$code]     = [];
+        continue;
+    }
+
     // Count active studies
     $countRow = sqlQuery(
-        'SELECT COUNT(*) AS cnt FROM ' . escape_table_name($tableName) . '
+        'SELECT COUNT(*) AS cnt FROM ' . $safeTable . '
           WHERE cardiology_id = ? AND pid = ? AND encounter = ? AND activity = 1',
         [$containerId, $pid, $encounter]
     );
@@ -100,7 +114,7 @@ foreach ($cards as $card) {
     // Fetch study list (id, study_date, status, user)
     $res = sqlStatement(
         'SELECT id, study_date, status, `user`
-           FROM ' . escape_table_name($tableName) . '
+           FROM ' . $safeTable . '
           WHERE cardiology_id = ? AND pid = ? AND encounter = ? AND activity = 1
           ORDER BY study_date ASC, id ASC',
         [$containerId, $pid, $encounter]

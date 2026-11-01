@@ -1,8 +1,11 @@
 # Formulario de Cardiología para OpenEMR
 
 > **Compatibilidad:** OpenEMR 8.2.0 – 8.5.0
-> **formdir:** `cardiology`
-> **Ubicación de instalación:** `interface/forms/cardiology/`
+> **formdir:** `form_cardiology`
+> **Ubicación de instalación:** `interface/forms/form_cardiology/`
+
+> [!NOTE]
+> **Nombre del formdir y función de reporte:** El nombre del directorio dentro de `interface/forms/` es el `formdir` registrado (`form_cardiology`). OpenEMR deriva automáticamente el nombre de la función de reporte de la consulta a partir de este formdir siguiendo el patrón `<formdir>_report()`, que en este módulo es `form_cardiology_report()`.
 
 ---
 
@@ -11,15 +14,16 @@
 1. [Descripción general](#1-descripción-general)
 2. [Arquitectura](#2-arquitectura)
 3. [Mapa de archivos](#3-mapa-de-archivos)
-4. [Instalación](#4-instalación)
+4. [Instalación y actualización](#4-instalación-y-actualización)
 5. [Cómo funciona](#5-cómo-funciona)
-6. [Cómo agregar un nuevo módulo (card)](#6-cómo-agregar-un-nuevo-módulo-card)
-7. [Convenciones de archivos para un módulo](#7-convenciones-de-archivos-para-un-módulo)
-8. [Reglas de visibilidad de módulos (CardRegistry)](#8-reglas-de-visibilidad-de-módulos-cardregistry)
-9. [Política de borrado lógico (soft-delete)](#9-política-de-borrado-lógico-soft-delete)
-10. [Limitación del hook de eliminación de OpenEMR](#10-limitación-del-hook-de-eliminación-de-openemr)
-11. [Traducción al español (lang_custom.sql)](#11-traducción-al-español-lang_customsql)
-12. [Lista de verificación de pruebas manuales](#12-lista-de-verificación-de-pruebas-manuales)
+6. [Especificación de módulos clínicos](#6-especificación-de-módulos-clínicos)
+7. [Cómo agregar un nuevo módulo (card)](#7-cómo-agregar-un-nuevo-módulo-card)
+8. [Convenciones de archivos para un módulo](#8-convenciones-de-archivos-para-un-módulo)
+9. [Reglas de visibilidad de módulos (CardRegistry)](#9-reglas-de-visibilidad-de-módulos-cardregistry)
+10. [Política de borrado lógico (soft-delete)](#10-política-de-borrado-lógico-soft-delete)
+11. [Limitación del hook de eliminación de OpenEMR](#11-limitación-del-hook-de-eliminación-de-openemr)
+12. [Traducción al español (lang_custom.sql)](#12-traducción-al-español-lang_customsql)
+13. [Lista de verificación de pruebas manuales](#13-lista-de-verificación-de-pruebas-manuales)
 
 ---
 
@@ -32,6 +36,9 @@ La idea central es un **contenedor genérico** (una fila por consulta) que aloja
 |---|---|---|
 | Ecocardiograma Doppler | `echo` | `form_card_echo` |
 | Ergometría / Prueba de Esfuerzo | `stress_test` | `form_card_stress_test` + `form_card_stress_test_stage` |
+| Electrocardiograma de 12 derivaciones | `ecg` | `form_card_ecg` |
+| Riesgo Cardiovascular Preoperatorio | `preop_risk` | `form_card_preop_risk` |
+| Certificado de Aptitud Cardiológica | `fitness` | `form_card_fitness` |
 
 Los módulos se habilitan o deshabilitan por clínica y por usuario desde `config.php`, **sin tocar código PHP**.  
 Agregar un nuevo módulo tampoco requiere modificar el contenedor.
@@ -43,9 +50,12 @@ Agregar un nuevo módulo tampoco requiere modificar el contenedor.
 ```
 form_cardiology          (1 fila por consulta – el "contenedor")
    │
-   ├── form_card_echo           (N estudios por consulta)
-   └── form_card_stress_test    (N estudios por consulta)
-          └── form_card_stress_test_stage  (M etapas por estudio)
+   ├── form_card_echo           (N estudios por consulta: Ecocardiograma Doppler)
+   ├── form_card_stress_test    (N estudios por consulta: Ergometría graduada)
+   │      └── form_card_stress_test_stage  (M etapas por estudio)
+   ├── form_card_ecg            (N estudios por consulta: ECG de 12 derivaciones)
+   ├── form_card_preop_risk     (N estudios por consulta: Riesgo Quirúrgico Lee RCRI)
+   └── form_card_fitness        (N estudios por consulta: Certificado de Aptitud Física)
 ```
 
 **Un contenedor por consulta.**  
@@ -60,15 +70,18 @@ Nunca tiene la lista de módulos codificada de forma rígida. La grilla de módu
 ## 3. Mapa de archivos
 
 ```
-interface/forms/cardiology/
+interface/forms/form_cardiology/
 ├── info.txt                        Nombre del formulario en OpenEMR ("Cardiology")
-├── table.sql                       DDL de todas las tablas + seeds de list_options
+├── table.sql                       DDL de todas las tablas + seeds de list_options (instalación inicial)
 ├── lang_custom.sql                 Traducciones al Español (Argentina) para xl*()
 ├── new.php                         Punto de entrada (contenedor nuevo)
 ├── view.php                        Reabre un contenedor existente
 ├── save.php                        Guarda motivo/notas; crea el contenedor de forma lazy
-├── report.php                      Fragmento de resumen de la consulta
+├── report.php                      Resumen genérico de la consulta (form_cardiology_report)
 ├── config.php                      Admin: habilitar/deshabilitar módulos por usuario
+│
+├── sql/
+│   └── upgrade_001_new_cards.sql   Migración idempotente para instalaciones existentes (ECG, Preop, Aptitud)
 │
 ├── lib/
 │   ├── CardiologyContainer.php     ensureContainer(), getContainer(), softDelete(), transacciones, sesiones
@@ -93,41 +106,73 @@ interface/forms/cardiology/
     │   ├── view.php                Ver / editar estudio existente
     │   ├── save.php                Guardado robusto con transacciones, CardInput y rangos
     │   └── print.php               Informe imprimible / PDF
-    └── stress_test/
-        ├── README.md               Documentación del módulo ergometría
-        ├── new.php                 Nuevo estudio de ergometría
-        ├── view.php                Ver / editar estudio existente y etapas
-        ├── save.php                Guardado atómico del estudio y etapas por protocolo
-        └── print.php               Informe imprimible / PDF con gráficos de etapas
+    ├── stress_test/
+    │   ├── README.md               Documentación del módulo ergometría
+    │   ├── new.php                 Nuevo estudio de ergometría
+    │   ├── view.php                Ver / editar estudio existente y etapas
+    │   ├── save.php                Guardado atómico del estudio y etapas por protocolo
+    │   └── print.php               Informe imprimible / PDF con gráficos de etapas
+    ├── ecg/
+    │   ├── README.md               Documentación del módulo ECG
+    │   ├── new.php                 Nuevo estudio de ECG de 12 derivaciones
+    │   ├── view.php                Ver / editar estudio existente
+    │   ├── save.php                Guardado robusto con cálculo de QTc (Bazett y Fridericia)
+    │   ├── print.php               Informe imprimible / PDF
+    │   └── ecg.js                  Cálculo interactivo en tiempo real de intervalos QTc
+    ├── preop_risk/
+    │   ├── README.md               Documentación del módulo de riesgo preoperatorio
+    │   ├── new.php                 Nueva evaluación de riesgo preoperatorio
+    │   ├── view.php                Ver / editar evaluación existente
+    │   ├── save.php                Guardado robusto con cálculo de puntaje y clase Lee RCRI
+    │   ├── print.php               Informe imprimible / PDF con factores de riesgo
+    │   └── preop_risk.js           Cálculo interactivo en tiempo real de puntaje y clase Lee
+    └── fitness/
+        ├── README.md               Documentación del módulo de aptitud física
+        ├── new.php                 Nuevo certificado (vigencia predefinida a +12 meses)
+        ├── view.php                Ver / editar certificado existente
+        ├── save.php                Guardado robusto con cálculo de IMC y reglas de vigencia
+        ├── print.php               Certificado imprimible con leyenda médico-legal y matrícula
+        └── fitness.js              Cálculo interactivo en tiempo real de IMC y validación de UI
 ```
 
 ---
 
-## 4. Instalación
+## 4. Instalación y actualización
 
 ### 4.1 Copiar los archivos
 
 Copiar el directorio completo a:
 
 ```
-<raíz de OpenEMR>/interface/forms/cardiology/
+<raíz de OpenEMR>/interface/forms/form_cardiology/
 ```
 
 ### 4.2 Ejecutar el SQL
 
+#### 4.2.1 Instalación inicial (base de datos limpia)
 Ejecutar **en orden** los siguientes scripts en la base de datos de OpenEMR:
 
 ```bash
-# 1. Crear tablas y seeds de listas
+# 1. Crear contenedor base y tablas de los 5 módulos con semillas de list_options
 mysql -u <usuario> -p <base_de_datos> < table.sql
 
 # 2. Cargar traducciones al español (Argentina)
 mysql -u <usuario> -p <base_de_datos> < lang_custom.sql
 ```
 
-> [!IMPORTANT]
-> `lang_custom.sql` usa `INSERT IGNORE` y `UPDATE ... WHERE definition <> ...`  
-> por lo que es **seguro re-ejecutar** sin perder traducciones personalizadas previas.
+#### 4.2.2 Actualización de instalación existente (`sql/upgrade_001_new_cards.sql`)
+Si ya tiene instalada la versión previa del contenedor con los módulos `echo` y `stress_test`, aplique el script de actualización incremental:
+
+```bash
+# 1. Crear tablas, módulos y opciones de lista de ECG, Riesgo Preoperatorio y Aptitud Física
+mysql -u <usuario> -p <base_de_datos> < sql/upgrade_001_new_cards.sql
+
+# 2. Actualizar traducciones
+mysql -u <usuario> -p <base_de_datos> < lang_custom.sql
+```
+
+> [!NOTE]
+> `sql/upgrade_001_new_cards.sql` es completamente idempotente: utiliza `CREATE TABLE IF NOT EXISTS` e `INSERT IGNORE`, por lo que puede re-ejecutarse con seguridad sin alterar datos existentes ni provocar colisiones.
 
 ### 4.3 Registrar el formulario en OpenEMR
 
@@ -171,7 +216,24 @@ La pantalla de configuración (`config.php`) requiere `admin / super`.
 
 ---
 
-## 6. Cómo agregar un nuevo módulo (card)
+## 6. Especificación de módulos clínicos
+
+El módulo integra 5 tarjetas clínicas diseñadas para la práctica cardiológica ambulatoria:
+
+| Código | Título | Tabla principal | Características clave y cálculos | Requisito para Finalizar |
+|---|---|---|---|---|
+| `echo` | Ecocardiograma Doppler | `form_card_echo` | Dimensiones en modo M/2D, gradientes y velocidades Doppler, valvulopatías, motilidad parietal, FEVI | `conclusion` |
+| `stress_test` | Ergometría / Prueba de Esfuerzo | `form_card_stress_test`, `form_card_stress_test_stage` | Protocolos de múltiples etapas (Bruce, Bruce modificado, Naughton, Ramp, etc.), METs, Duke treadmill score (para protocolo Bruce), gráficos de etapas | `conclusion` |
+| `ecg` | ECG de 12 derivaciones | `form_card_ecg` | Ritmo, intervalos de conducción (PR, QRS, QT), eje eléctrico, repolarización ventricular. Fórmulas: QTc Bazett = `QT / sqrt(60/FC)`, QTc Fridericia = `QT / cbrt(60/FC)`. Cálculo en tiempo real en `ecg.js`. | `conclusion` |
+| `preop_risk` | Riesgo Cardiovascular Preoperatorio | `form_card_preop_risk` | Índice de Riesgo Cardíaco Revisado (RCRI de Lee) con 6 predictores clínicos (cirugía de alto riesgo, cardiopatía isquémica, insuficiencia cardíaca, enfermedad cerebrovascular, diabetes insulino-requiriente, creatinina > 2.0 mg/dL). Calcula puntaje (0 a 6) y Clase Lee (I a IV). Evaluación neutral sin porcentajes fijos de eventos. Cálculo en tiempo real en `preop_risk.js`. | `recommendation` Y `conclusion` |
+| `fitness` | Certificado de Aptitud Cardiológica | `form_card_fitness` | Antropometría (peso, talla, ASC, cálculo automático de IMC = `kg/m²`), examen cardiovascular, resúmenes de ECG y ergometría, dictamen (`fit`, `fit_restrictions`, `unfit`, `temporary_unfit`), actividades deportivas, restricciones clínicas (obligatorias si `fit_restrictions`), fecha de vigencia `valid_until` (predefinida +12 meses, debe superar `study_date`). Impresión de certificado oficial con declaración médico-legal neutral: *"En base al examen realizado el <fecha>, el paciente se considera <dictamen>."* y número de matrícula médica (`state_license_number`). Cálculo en tiempo real en `fitness.js`. | `determination`, `valid_until`, `conclusion`, y `restrictions` (si `fit_restrictions`) |
+
+> [!NOTE]
+> **Gráficos de evolución longitudinal:** Los módulos preexistentes (`echo` y `stress_test`) se enfocan de manera atómica en la consulta actual y no generan gráficos de evolución longitudinal cruzando diferentes consultas históricas del paciente. De acuerdo con esta arquitectura, los nuevos módulos no implementan gráficos entre estudios históricos, preservando el aislamiento modular y el rendimiento en la base de datos.
+
+---
+
+## 7. Cómo agregar un nuevo módulo (card)
 
 Agregar un nuevo módulo **no requiere cambios en el código del contenedor**.
 
@@ -189,7 +251,7 @@ Agregar un nuevo módulo **no requiere cambios en el código del contenedor**.
 2. **Crear la carpeta del módulo** con sus archivos PHP requeridos:
 
    ```
-   interface/forms/cardiology/cards/mi_modulo/
+   interface/forms/form_cardiology/cards/mi_modulo/
    ├── new.php
    ├── view.php
    ├── save.php
@@ -221,7 +283,7 @@ Agregar un nuevo módulo **no requiere cambios en el código del contenedor**.
 
 ---
 
-## 7. Convenciones de archivos para un módulo
+## 8. Convenciones de archivos para un módulo
 
 Cada módulo vive en `cards/<code>/` y debe proveer:
 
@@ -269,7 +331,7 @@ if ($pid <= 0 || $pid !== CardiologyContainer::getSessionPid() || $encounter !==
 
 ---
 
-## 7.1 Helper de validación de entradas (`CardInput`)
+## 8.1 Helper de validación de entradas (`CardInput`)
 
 Ubicado en `lib/CardInput.php` (namespace `OpenEMR\Forms\Cardiology`, `declare(strict_types=1)`).  
 Todos los métodos lanzan `\InvalidArgumentException` incluyendo el nombre del campo en el mensaje si la validación falla.
@@ -285,7 +347,7 @@ Todos los métodos lanzan `\InvalidArgumentException` incluyendo el nombre del c
 
 ---
 
-## 8. Reglas de visibilidad de módulos (CardRegistry)
+## 9. Reglas de visibilidad de módulos (CardRegistry)
 
 `CardRegistry::getVisibleCards(int $userId)` devuelve un módulo cuando se cumplen **todas** las condiciones:
 
@@ -301,7 +363,7 @@ Un módulo que pasa las tres reglas pero cuya carpeta o archivos requeridos est�
 
 ---
 
-## 9. Política de borrado lógico (soft-delete)
+## 10. Política de borrado lógico (soft-delete)
 
 ### Contenedor (`form_cardiology`)
 
@@ -322,7 +384,7 @@ Un módulo que pasa las tres reglas pero cuya carpeta o archivos requeridos est�
 
 ---
 
-## 10. Limitación del hook de eliminación de OpenEMR
+## 11. Limitación del hook de eliminación de OpenEMR
 
 OpenEMR no provee un hook formal de borrado en cascada para formularios personalizados.  
 Cuando se elimina la consulta o el paciente, la fila de `forms` se marca como `deleted = 1`, pero las filas de `form_cardiology` y `form_card_*` **no se tocan automáticamente**.
@@ -331,7 +393,7 @@ Cuando se elimina la consulta o el paciente, la fila de `forms` se marca como `d
 
 ---
 
-## 11. Traducción al español (lang_custom.sql)
+## 12. Traducción al español (lang_custom.sql)
 
 El archivo `lang_custom.sql` contiene las traducciones al **Español (Argentina)** de todos los strings que aparecen en llamadas `xl()` / `xlt()` / `xla()` / `xlj()` de los archivos PHP del módulo, más los títulos de las listas de opciones registradas en `table.sql`.
 
@@ -363,42 +425,42 @@ El script sigue el mismo patrón que otros módulos del proyecto:
 
 ---
 
-## 12. Lista de verificación de pruebas manuales
+## 13. Lista de verificación de pruebas manuales
 
 Ejecutar estos pasos en una instalación de prueba antes de desplegar en producción.
 
-### 12.1 Abrir el formulario (contenedor nuevo)
+### 13.1 Abrir el formulario (contenedor nuevo)
 
 - [ ] Abrir la consulta de un paciente.
 - [ ] Hacer clic en **Cardiología** en el menú de formularios de la consulta.
 - [ ] Verificar que `new.php` se renderiza sin errores PHP.
-- [ ] Verificar que ambas tarjetas de módulos aparecen marcadas como **«No instalado»** con el tooltip visible al pasar el cursor.
+- [ ] Verificar que ambas tarjetas de módulos aparecen marcadas como **«No instalado»** con el tooltip visible al pasar el cursor si faltan archivos.
 - [ ] Verificar que el nombre del paciente y el número de consulta aparecen en el encabezado.
 - [ ] Verificar que los textos de la interfaz aparecen en español.
 
-### 12.2 Guardar Motivo / Notas
+### 13.2 Guardar Motivo / Notas
 
 - [ ] Escribir texto en **Motivo de Consulta** y **Notas de la Consulta**.
 - [ ] Hacer clic en **Guardar**.
 - [ ] Verificar que `save.php` redirige a `view.php`.
 - [ ] Verificar que la fila aparece en `form_cardiology` (`activity = 1`).
-- [ ] Verificar que aparece una fila en `forms` (`formdir = 'cardiology'`, `deleted = 0`).
+- [ ] Verificar que aparece una fila en `forms` (`formdir = 'form_cardiology'`, `deleted = 0`).
 - [ ] Recargar `view.php`; verificar que el motivo y las notas están precargados.
 - [ ] Verificar que el resumen de la consulta muestra la fila de cardiología.
 
-### 12.3 Redirección de contenedor existente
+### 13.3 Redirección de contenedor existente
 
 - [ ] Estando en la misma consulta, abrir el formulario nuevamente desde el menú (`new.php`).
 - [ ] Verificar que se redirige a `view.php` (no a un formulario vacío nuevo).
 - [ ] Verificar que no hay filas duplicadas en `form_cardiology`.
 
-### 12.4 ACL denegada
+### 13.4 ACL denegada
 
 - [ ] Iniciar sesión como un usuario cuyo rol ACL **no** incluye `patients / med`.
 - [ ] Navegar directamente a `new.php` o `view.php`.
 - [ ] Verificar que la página muestra `«No autorizado»` y se detiene.
 
-### 12.5 Módulo deshabilitado por usuario
+### 13.5 Módulo deshabilitado por usuario
 
 - [ ] Abrir `config.php` como administrador.
 - [ ] Seleccionar **Usuario específico**, elegir el usuario de prueba y **desmarcar** el módulo `echo`.
@@ -406,33 +468,33 @@ Ejecutar estos pasos en una instalación de prueba antes de desplegar en producc
 - [ ] Verificar que la tarjeta `echo` **no** aparece en la grilla.
 - [ ] Verificar que la tarjeta `stress_test` sigue apareciendo.
 
-### 12.6 Módulo deshabilitado globalmente
+### 13.6 Módulo deshabilitado globalmente
 
 - [ ] Abrir `config.php` como administrador.
 - [ ] En `card_modules`, establecer `global_active = 0` para `echo` (SQL directo o desde la pantalla de configuración cuando esa columna esté expuesta).
 - [ ] Abrir una consulta cardiológica como cualquier usuario.
 - [ ] Verificar que la tarjeta `echo` **no** aparece.
 
-### 12.7 Fallo de CSRF
+### 13.7 Fallo de CSRF
 
 - [ ] Abrir las herramientas de desarrollo del navegador, copiar el HTML del formulario y enviarlo con un valor de `csrf_token_form` modificado o ausente a `save.php`.
 - [ ] Verificar que la solicitud es rechazada (página de error CSRF de OpenEMR o `die()`).
 - [ ] Verificar que no se inserta ninguna fila en `form_cardiology`.
 
-### 12.8 Guardar configuración
+### 13.8 Guardar configuración
 
 - [ ] Abrir `config.php` como administrador.
 - [ ] Cambiar un módulo entre activo/inactivo en el ámbito de clínica y guardar.
 - [ ] Verificar que se inserta/actualiza una fila en `card_config` con `user_id = 0`.
 - [ ] Revertir el cambio y verificar que la fila se actualiza.
 
-### 12.9 No administrador no puede acceder a config.php
+### 13.9 No administrador no puede acceder a config.php
 
 - [ ] Iniciar sesión como un usuario sin rol administrador.
 - [ ] Navegar directamente a `config.php`.
 - [ ] Verificar que la página muestra `«No autorizado»` y se detiene.
 
-### 12.10 Traducción al español
+### 13.10 Traducción al español
 
 - [ ] Con el idioma de la sesión configurado en **Español (Latinoamérica)**, abrir el formulario.
 - [ ] Verificar que todos los textos de la UI aparecen en español:
@@ -443,49 +505,79 @@ Ejecutar estos pasos en una instalación de prueba antes de desplegar en producc
   - Badges de estado (Borrador / Final).
 - [ ] Verificar que los títulos de las listas de opciones (grados valvulares, protocolos de ergometría, etc.) aparecen en español en los formularios de estudios.
 
-### 12.11 Aceptación de coma decimal
+### 13.11 Aceptación de coma decimal
 - [ ] En un estudio de ecocardiograma o ergometría, ingresar un número decimal con coma (ej. `55,5` en `height_cm` o `lvedd_mm`).
 - [ ] Guardar el estudio.
 - [ ] Verificar que el valor se guarda y procesa como decimal numérico (`55.5` o `55.500`).
 
-### 12.12 Rechazo de entradas no numéricas
+### 13.12 Rechazo de entradas no numéricas
 - [ ] Ingresar texto no numérico (ej. `abc` o `12x`) en un campo numérico (ej. `weight_kg`).
 - [ ] Enviar el formulario.
 - [ ] Verificar que la transacción se cancela (rollback) y se muestra una pantalla limpia de `Error de Validación` identificando el campo y con un botón Volver funcional.
 
-### 12.13 Rechazo de valores fuera de los límites de plausibilidad
+### 13.13 Rechazo de valores fuera de los límites de plausibilidad
 - [ ] Ingresar un valor que sobrepase los límites de plausibilidad (ej. `height_cm = 300` o `lvef_pct = 95`).
 - [ ] Enviar el formulario.
 - [ ] Verificar que se rechaza la operación informando el límite permitido.
 
-### 12.14 Rechazo de opción de lista inválida
+### 13.14 Rechazo de opción de lista inválida
 - [ ] Mediante herramientas del navegador o cURL, enviar un POST con una opción inexistente para una lista (ej. `protocol = 'protocolo_inventado'`).
 - [ ] Verificar que se lanza `\InvalidArgumentException` y se muestra la pantalla de error de validación.
 
-### 12.15 Rechazo de edición sobre estudio finalizado
+### 13.15 Rechazo de edición sobre estudio finalizado
 - [ ] Finalizar un estudio (`action = 'save_final'`).
 - [ ] Enviar una petición POST intentando modificar dicho estudio (`study_id = <idFinalizado>`).
 - [ ] Verificar que se bloquea la operación (`Este estudio está finalizado y no puede editarse.`).
 
-### 12.16 Rechazo por discrepancia de paciente / consulta en el contenedor
+### 13.16 Rechazo por discrepancia de paciente / consulta en el contenedor
 - [ ] Enviar un POST donde `cardiology_id` pertenezca al paciente A, pero el `pid` pertenezca al paciente B.
 - [ ] Verificar que se rechaza con `El contenedor no coincide con el paciente o la consulta.`.
 
-### 12.17 Rechazo de POST directo a módulo deshabilitado
+### 13.17 Rechazo de POST directo a módulo deshabilitado
 - [ ] En `config.php`, deshabilitar el módulo `echo` para el usuario actual.
 - [ ] Intentar un POST directo a `cards/echo/save.php` con ese usuario.
 - [ ] Verificar que se bloquea la solicitud con `No autorizado` mediante `CardRegistry::canWrite()`.
 
-### 12.18 Rechazo de finalización sin conclusión
+### 13.18 Rechazo de finalización sin conclusión
 - [ ] Dejar el campo **Conclusión** vacío y presionar **Finalizar** (`save_final`).
 - [ ] Verificar que se detiene el proceso y se muestra el mensaje `Se requiere una conclusión para finalizar el estudio.`.
 
-### 12.19 Dependencia del cálculo de Duke según el protocolo
+### 13.19 Dependencia del cálculo de Duke según el protocolo
 - [ ] En una ergometría con protocolo `Bruce` y duración `600` segundos, verificar que el Duke score se calcula y almacena.
 - [ ] Modificar el protocolo a `Naughton` o `Ramp` y guardar.
 - [ ] Verificar que el campo `duke_score` se almacena como `NULL`.
 
-### 12.20 Validación de etapas de ergometría
+### 13.20 Validación de etapas de ergometría
 - [ ] Enviar una fila de etapa con una fase inválida (distinta de `rest`, `exercise`, o `recovery`). Verificar que se rechaza.
 - [ ] Intentar enviar más de 100 etapas en la misma solicitud. Verificar rechazo con `Se superó el límite máximo de 100 registros de etapas.`.
+
+### 13.21 ECG: Borrador y finalización
+- [ ] En una consulta activa, abrir el módulo de **ECG de 12 derivaciones** (`ecg`).
+- [ ] Ingresar frecuencia cardíaca `75`, PR `160`, QRS `90`, QT `380`.
+- [ ] Verificar que la vista previa en tiempo real calcula QTc Bazett `425 ms` y QTc Fridericia `409 ms`.
+- [ ] Presionar **Guardar borrador**. Verificar que el estudio se guarda con `status = 'draft'` y es editable.
+- [ ] Presionar **Finalizar** sin completar la conclusión. Verificar que se rechaza informando que la conclusión es obligatoria.
+- [ ] Completar la conclusión y presionar **Finalizar**. Verificar que el estudio pasa a `status = 'final'` con fecha y usuario de finalización, bloqueando los campos.
+- [ ] Intentar un POST directo modificando el estudio finalizado. Verificar que se bloquea con `Este estudio está finalizado y no puede editarse.`.
+- [ ] Presionar **Imprimir**. Verificar que la vista imprimible/PDF muestra correctamente el encabezado, hallazgos, valores de QTc calculados y conclusión.
+
+### 13.22 Riesgo Preoperatorio: Cálculo de puntaje RCRI y reglas de finalización
+- [ ] Abrir el módulo de **Riesgo Cardiovascular Preoperatorio** (`preop_risk`).
+- [ ] Marcar las casillas `Cirugía de alto riesgo` y `Cardiopatía isquémica`.
+- [ ] Verificar que la interfaz calcula en tiempo real Puntaje Lee RCRI `2` y Clase `III`.
+- [ ] Presionar **Guardar borrador**. Verificar que el estudio se guarda como borrador conservando puntaje y clase.
+- [ ] Presionar **Finalizar** con `conclusion` completo pero `recommendation` vacío. Verificar que se rechaza exigiendo ambos campos.
+- [ ] Completar la recomendación y finalizar. Verificar que el estudio se bloquea en modo solo lectura.
+- [ ] Abrir la vista imprimible. Verificar que lista el procedimiento quirúrgico, los 6 predictores con sus indicadores, puntaje y clase Lee (sin porcentajes fijos de eventos), recomendaciones y conclusiones.
+
+### 13.23 Certificado de Aptitud: Vigencia, restricciones e impresión del certificado
+- [ ] Abrir el módulo de **Certificado de Aptitud Cardiológica** (`fitness`).
+- [ ] Verificar que `valid_until` aparece precargado con la fecha de hoy más 12 meses.
+- [ ] Ingresar talla `175` cm y peso `70` kg. Verificar cálculo en tiempo real de IMC `22.86`.
+- [ ] Seleccionar dictamen `fit_restrictions` y dejar `restrictions` vacío. Presionar **Finalizar**.
+- [ ] Verificar que se rechaza la operación exigiendo las restricciones clínicas específicas.
+- [ ] Configurar `valid_until` con una fecha anterior a `study_date`. Presionar **Finalizar**.
+- [ ] Verificar que se rechaza informando que la fecha de vigencia debe ser posterior a la fecha del estudio.
+- [ ] Ingresar restricciones válidas y fecha de vigencia futura. Presionar **Finalizar**.
+- [ ] Presionar **Imprimir**. Verificar que se genera el certificado oficial con la leyenda médico-legal neutral: *"En base al examen realizado el <fecha>, el paciente se considera <dictamen>."*, las actividades permitidas, vigencia y la matrícula del profesional evaluador (`state_license_number`).
 
