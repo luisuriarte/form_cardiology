@@ -24,8 +24,10 @@ declare(strict_types=1);
 
 require_once('../../../../globals.php');
 require_once($GLOBALS['srcdir'] . '/api.inc.php');
+require_once(__DIR__ . '/../../lib/CardiologyContainer.php');
 
 use OpenEMR\Common\Acl\AclMain;
+use OpenEMR\Forms\Cardiology\CardiologyContainer;
 
 if (!AclMain::aclCheckCore('patients', 'med')) {
     die(xlt('Not authorized'));
@@ -145,7 +147,7 @@ $phaseLabels = [
     <link rel="stylesheet"
           href="<?php echo attr($GLOBALS['webroot']); ?>/public/assets/bootstrap/dist/css/bootstrap.min.css">
     <link rel="stylesheet"
-          href="<?php echo attr($GLOBALS['webroot']); ?>/interface/forms/cardiology/css/cardiology.css">
+          href="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/css/cardiology.css">
     <style>
         body { font-size: 13px; }
         .report-header { border-bottom: 2px solid #dc3545; margin-bottom: 1rem; }

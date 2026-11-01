@@ -19,10 +19,12 @@
 
 require_once('../../globals.php');
 require_once($GLOBALS['srcdir'] . '/api.inc.php');
+require_once(__DIR__ . '/lib/CardiologyContainer.php');
 
 use OpenEMR\Common\Acl\AclMain;
 use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Core\Header;
+use OpenEMR\Forms\Cardiology\CardiologyContainer;
 
 // ---------------------------------------------------------------------------
 // ACL: only admins may access this page
@@ -38,7 +40,7 @@ $saved   = false;
 $saveErr = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if (!CsrfUtils::verifyCsrfToken($_POST['csrf_token_form'] ?? '')) {
+    if (!CardiologyContainer::verifyCsrfToken()) {
         CsrfUtils::csrfNotVerified();
     }
 
@@ -139,7 +141,7 @@ $configMap    = loadConfigForUser($configUserId);
     <title><?php echo xlt('Cardiology Card Configuration'); ?></title>
     <?php Header::setupHeader(); ?>
     <link rel="stylesheet"
-          href="<?php echo attr($GLOBALS['webroot']); ?>/interface/forms/cardiology/css/cardiology.css?v=<?php echo attr($GLOBALS['v_js_includes']); ?>">
+          href="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/css/cardiology.css?v=<?php echo attr($GLOBALS['v_js_includes']); ?>">
 </head>
 <body>
 <div class="container mt-4">
@@ -196,7 +198,7 @@ $configMap    = loadConfigForUser($configUserId);
     <!-- Main configuration form -->
     <form method="post" id="cardiology-config-form">
         <input type="hidden" name="csrf_token_form"
-               value="<?php echo attr(CsrfUtils::collectCsrfToken()); ?>">
+               value="<?php echo attr(CardiologyContainer::collectCsrfToken()); ?>">
         <input type="hidden" name="scope"
                value="<?php echo attr($currentScope); ?>">
         <input type="hidden" name="config_user_id"
@@ -292,7 +294,7 @@ $configMap    = loadConfigForUser($configUserId);
 
 </div><!-- .container -->
 
-<script src="<?php echo attr($GLOBALS['webroot']); ?>/interface/forms/cardiology/js/cardiology.js?v=<?php echo attr($GLOBALS['v_js_includes']); ?>"></script>
+<script src="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/js/cardiology.js?v=<?php echo attr($GLOBALS['v_js_includes']); ?>"></script>
 </body>
 </html>
 

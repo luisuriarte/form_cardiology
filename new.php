@@ -60,8 +60,8 @@ if (empty($pid) || empty($encounter)) {
 $existingContainer = CardiologyContainer::getContainer((int)$pid, (int)$encounter);
 if ($existingContainer !== null) {
     // Use a server-side redirect before any output.
-    $viewUrl = $GLOBALS['rootdir']
-        . '/forms/cardiology/view.php?id='
+    $viewUrl = CardiologyContainer::getFormRootUrl()
+        . '/view.php?id='
         . urlencode((string)$existingContainer['id']);
     header('Location: ' . $viewUrl);
     exit;
@@ -92,7 +92,7 @@ $studies     = [];   // keyed by card code → list of study rows
     <title><?php echo xlt('Cardiology'); ?></title>
     <?php Header::setupHeader(); ?>
     <link rel="stylesheet"
-          href="<?php echo attr($GLOBALS['webroot']); ?>/interface/forms/cardiology/css/cardiology.css?v=<?php echo attr($GLOBALS['v_js_includes']); ?>">
+          href="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/css/cardiology.css?v=<?php echo attr($GLOBALS['v_js_includes']); ?>">
 </head>
 <body>
 <div class="container-fluid cardiology-container mt-3">
@@ -101,10 +101,10 @@ $studies     = [];   // keyed by card code → list of study rows
 
     <form method="post"
           id="cardiology-container-form"
-          action="<?php echo attr($GLOBALS['rootdir']); ?>/forms/cardiology/save.php">
+          action="<?php echo attr(CardiologyContainer::getFormRootUrl()); ?>/save.php">
 
         <input type="hidden" name="csrf_token_form"
-               value="<?php echo attr(CsrfUtils::collectCsrfToken()); ?>">
+               value="<?php echo attr(CardiologyContainer::collectCsrfToken()); ?>">
         <input type="hidden" name="pid"       value="<?php echo attr((string)$pid); ?>">
         <input type="hidden" name="encounter" value="<?php echo attr((string)$encounter); ?>">
         <input type="hidden" name="cardiology_id" value=""><!-- filled on first save -->
@@ -128,7 +128,7 @@ $studies     = [];   // keyed by card code → list of study rows
 
 </div><!-- .cardiology-container -->
 
-<script src="<?php echo attr($GLOBALS['webroot']); ?>/interface/forms/cardiology/js/cardiology.js?v=<?php echo attr($GLOBALS['v_js_includes']); ?>"></script>
+<script src="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/js/cardiology.js?v=<?php echo attr($GLOBALS['v_js_includes']); ?>"></script>
 </body>
 </html>
 

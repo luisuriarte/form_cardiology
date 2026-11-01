@@ -46,6 +46,67 @@ class CardiologyContainer
     /** Table that holds the container rows. */
     public const TABLE = 'form_cardiology';
 
+    /**
+     * Folder name of this module inside interface/forms/ (e.g. 'form_cardiology' or 'cardiology').
+     */
+    public static function getFormDir(): string
+    {
+        return basename(dirname(__DIR__));
+    }
+
+    /**
+     * Root URL for scripts in this form (e.g. '/openemr/interface/forms/form_cardiology').
+     */
+    public static function getFormRootUrl(): string
+    {
+        return ($GLOBALS['rootdir'] ?? '') . '/forms/' . self::getFormDir();
+    }
+
+    /**
+     * Web root URL for assets (e.g. '/openemr/interface/forms/form_cardiology').
+     */
+    public static function getWebRootUrl(): string
+    {
+        return ($GLOBALS['webroot'] ?? '') . '/interface/forms/' . self::getFormDir();
+    }
+
+    /**
+     * Collect CSRF token compatible across OpenEMR versions (8.0, 8.2, 8.5+).
+     */
+    public static function collectCsrfToken(string $subject = 'default'): string
+    {
+        $session = $GLOBALS['session'] ?? \OpenEMR\Common\Session\SessionWrapperFactory::getInstance()->getActiveSession();
+        try {
+            $ref = new \ReflectionMethod(\OpenEMR\Common\Csrf\CsrfUtils::class, 'collectCsrfToken');
+            $params = $ref->getParameters();
+            if (!empty($params) && $params[0]->getName() === 'session') {
+                return (string)\OpenEMR\Common\Csrf\CsrfUtils::collectCsrfToken($session, $subject);
+            }
+            return (string)\OpenEMR\Common\Csrf\CsrfUtils::collectCsrfToken($subject, $session);
+        } catch (\Throwable $e) {
+            return '';
+        }
+    }
+
+    /**
+     * Verify CSRF token compatible across OpenEMR versions.
+     */
+    public static function verifyCsrfToken(?string $token = null, string $subject = 'default'): bool
+    {
+        $session = $GLOBALS['session'] ?? \OpenEMR\Common\Session\SessionWrapperFactory::getInstance()->getActiveSession();
+        $token = $token ?? $_POST['csrf_token_form'] ?? '';
+        try {
+            $ref = new \ReflectionMethod(\OpenEMR\Common\Csrf\CsrfUtils::class, 'verifyCsrfToken');
+            $params = $ref->getParameters();
+            if (count($params) >= 2 && $params[1]->getName() === 'session') {
+                return (bool)\OpenEMR\Common\Csrf\CsrfUtils::verifyCsrfToken($token, $session, $subject);
+            }
+            return (bool)\OpenEMR\Common\Csrf\CsrfUtils::verifyCsrfToken($token, $subject, $session);
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Public API
     // -------------------------------------------------------------------------
@@ -137,7 +198,7 @@ class CardiologyContainer
             $encounter,
             self::FORM_NAME,
             $containerId,
-            self::FORM_DIR,
+            self::getFormDir(),
             $pid,
             (string)$userauthorized
         );

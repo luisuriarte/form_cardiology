@@ -43,8 +43,8 @@ $pid          = (int)($_GET['pid']           ?? $GLOBALS['pid'] ?? 0);
 $encounter    = (int)($_GET['encounter']     ?? $GLOBALS['encounter'] ?? 0);
 
 if ($studyId <= 0) {
-    $newUrl = $GLOBALS['rootdir']
-        . '/forms/cardiology/cards/echo/new.php?pid=' . urlencode((string)$pid)
+    $newUrl = CardiologyContainer::getFormRootUrl()
+        . '/cards/echo/new.php?pid=' . urlencode((string)$pid)
         . '&encounter=' . urlencode((string)$encounter)
         . '&cardiology_id=' . urlencode((string)$cardiologyId);
     header('Location: ' . $newUrl);
@@ -96,7 +96,7 @@ $statusClass = $readOnly ? 'bg-success' : 'bg-warning text-dark';
     <title><?php echo xlt('Echocardiogram – View Study'); ?></title>
     <?php Header::setupHeader(); ?>
     <link rel="stylesheet"
-          href="<?php echo attr($GLOBALS['webroot']); ?>/interface/forms/cardiology/css/cardiology.css?v=<?php echo attr($GLOBALS['v_js_includes']); ?>">
+          href="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/css/cardiology.css?v=<?php echo attr($GLOBALS['v_js_includes']); ?>">
 </head>
 <body>
 <div class="container-fluid cardiology-container mt-3">
@@ -126,8 +126,8 @@ $statusClass = $readOnly ? 'bg-success' : 'bg-warning text-dark';
     <?php if ($readOnly) : ?>
     <div class="row mb-3">
         <div class="col-12">
-            <a href="<?php echo attr($GLOBALS['rootdir']
-                . '/forms/cardiology/cards/echo/print.php?pid=' . urlencode((string)$pid)
+            <a href="<?php echo attr(CardiologyContainer::getFormRootUrl()
+                . '/cards/echo/print.php?pid=' . urlencode((string)$pid)
                 . '&encounter=' . urlencode((string)$encounter)
                 . '&cardiology_id=' . urlencode((string)$cardiologyId)
                 . '&id=' . urlencode((string)$studyId)); ?>"
@@ -135,8 +135,8 @@ $statusClass = $readOnly ? 'bg-success' : 'bg-warning text-dark';
                 <i class="fa fa-print me-1" aria-hidden="true"></i>
                 <?php echo xlt('Print PDF'); ?>
             </a>
-            <a href="<?php echo attr($GLOBALS['rootdir']
-                . '/forms/cardiology/view.php?id=' . urlencode((string)$cardiologyId)); ?>"
+            <a href="<?php echo attr(CardiologyContainer::getFormRootUrl()
+                . '/view.php?id=' . urlencode((string)$cardiologyId)); ?>"
                class="btn btn-secondary ms-2" onclick="top.restoreSession()">
                 <?php echo xlt('Back'); ?>
             </a>
@@ -145,10 +145,10 @@ $statusClass = $readOnly ? 'bg-success' : 'bg-warning text-dark';
     <?php endif; ?>
 
     <form method="post" id="echo-form"
-          action="<?php echo attr($GLOBALS['rootdir']); ?>/forms/cardiology/cards/echo/save.php">
+          action="<?php echo attr(CardiologyContainer::getFormRootUrl()); ?>/cards/echo/save.php">
 
         <input type="hidden" name="csrf_token_form"
-               value="<?php echo attr(CsrfUtils::collectCsrfToken()); ?>">
+               value="<?php echo attr(CardiologyContainer::collectCsrfToken()); ?>">
         <input type="hidden" name="pid"           value="<?php echo attr((string)$pid); ?>">
         <input type="hidden" name="encounter"     value="<?php echo attr((string)$encounter); ?>">
         <input type="hidden" name="cardiology_id" value="<?php echo attr((string)$cardiologyId); ?>">
@@ -168,8 +168,8 @@ $statusClass = $readOnly ? 'bg-success' : 'bg-warning text-dark';
                         onclick="return confirm(<?php echo xlj('Finalize this study? It will become read-only.'); ?>)">
                     <?php echo xlt('Finalize'); ?>
                 </button>
-                <a href="<?php echo attr($GLOBALS['rootdir']
-                    . '/forms/cardiology/view.php?id=' . urlencode((string)$cardiologyId)); ?>"
+                <a href="<?php echo attr(CardiologyContainer::getFormRootUrl()
+                    . '/view.php?id=' . urlencode((string)$cardiologyId)); ?>"
                    class="btn btn-secondary ms-2" onclick="top.restoreSession()">
                     <?php echo xlt('Cancel'); ?>
                 </a>
@@ -179,6 +179,6 @@ $statusClass = $readOnly ? 'bg-success' : 'bg-warning text-dark';
     </form>
 
 </div>
-<script src="<?php echo attr($GLOBALS['webroot']); ?>/interface/forms/cardiology/cards/echo/echo.js?v=<?php echo attr($GLOBALS['v_js_includes']); ?>"></script>
+<script src="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/cards/echo/echo.js?v=<?php echo attr($GLOBALS['v_js_includes']); ?>"></script>
 </body>
 </html>

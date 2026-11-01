@@ -38,7 +38,7 @@ require_once(__DIR__ . '/../../lib/CardiologyContainer.php');
 // ---------------------------------------------------------------------------
 // 1. CSRF
 // ---------------------------------------------------------------------------
-if (!CsrfUtils::verifyCsrfToken($_POST['csrf_token_form'] ?? '')) {
+if (!CardiologyContainer::verifyCsrfToken()) {
     CsrfUtils::csrfNotVerified();
 }
 
@@ -347,8 +347,8 @@ if ($studyId === 0) {
 // ---------------------------------------------------------------------------
 // Redirect to view.php
 // ---------------------------------------------------------------------------
-$viewUrl = $GLOBALS['rootdir']
-    . '/forms/cardiology/cards/echo/view.php'
+$viewUrl = CardiologyContainer::getFormRootUrl()
+    . '/cards/echo/view.php'
     . '?pid='          . urlencode((string)$pid)
     . '&encounter='    . urlencode((string)$encounter)
     . '&cardiology_id=' . urlencode((string)$cardiologyId)

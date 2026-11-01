@@ -31,7 +31,7 @@ require_once(__DIR__ . '/lib/CardiologyContainer.php');
 // ---------------------------------------------------------------------------
 // CSRF verification (must be first, before reading any POST data)
 // ---------------------------------------------------------------------------
-if (!CsrfUtils::verifyCsrfToken($_POST['csrf_token_form'] ?? '')) {
+if (!CardiologyContainer::verifyCsrfToken()) {
     CsrfUtils::csrfNotVerified();
 }
 
@@ -89,8 +89,8 @@ if ($cardiologyId > 0) {
 // ---------------------------------------------------------------------------
 // Redirect to view.php so the user sees the saved data and the card grid
 // ---------------------------------------------------------------------------
-$viewUrl = $GLOBALS['rootdir']
-    . '/forms/cardiology/view.php?id='
+$viewUrl = CardiologyContainer::getFormRootUrl()
+    . '/view.php?id='
     . urlencode((string)$containerId);
 
 formJump($viewUrl);

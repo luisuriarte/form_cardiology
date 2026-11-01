@@ -55,7 +55,7 @@ if ($containerIdParam > 0) {
 
 if ($container === null) {
     // Container does not exist or is deleted; open new.php instead.
-    header('Location: ' . $GLOBALS['rootdir'] . '/forms/cardiology/new.php');
+    header('Location: ' . CardiologyContainer::getFormRootUrl() . '/new.php');
     exit;
 }
 
@@ -121,7 +121,7 @@ foreach ($cards as $card) {
     <title><?php echo xlt('Cardiology'); ?></title>
     <?php Header::setupHeader(); ?>
     <link rel="stylesheet"
-          href="<?php echo attr($GLOBALS['webroot']); ?>/interface/forms/cardiology/css/cardiology.css?v=<?php echo attr($GLOBALS['v_js_includes']); ?>">
+          href="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/css/cardiology.css?v=<?php echo attr($GLOBALS['v_js_includes']); ?>">
 </head>
 <body>
 <div class="container-fluid cardiology-container mt-3">
@@ -130,10 +130,10 @@ foreach ($cards as $card) {
 
     <form method="post"
           id="cardiology-container-form"
-          action="<?php echo attr($GLOBALS['rootdir']); ?>/forms/cardiology/save.php">
+          action="<?php echo attr(CardiologyContainer::getFormRootUrl()); ?>/save.php">
 
         <input type="hidden" name="csrf_token_form"
-               value="<?php echo attr(CsrfUtils::collectCsrfToken()); ?>">
+               value="<?php echo attr(CardiologyContainer::collectCsrfToken()); ?>">
         <input type="hidden" name="pid"          value="<?php echo attr((string)$pid); ?>">
         <input type="hidden" name="encounter"    value="<?php echo attr((string)$encounter); ?>">
         <input type="hidden" name="cardiology_id" value="<?php echo attr((string)$containerId); ?>">
@@ -157,7 +157,7 @@ foreach ($cards as $card) {
 
 </div><!-- .cardiology-container -->
 
-<script src="<?php echo attr($GLOBALS['webroot']); ?>/interface/forms/cardiology/js/cardiology.js?v=<?php echo attr($GLOBALS['v_js_includes']); ?>"></script>
+<script src="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/js/cardiology.js?v=<?php echo attr($GLOBALS['v_js_includes']); ?>"></script>
 </body>
 </html>
 

@@ -49,7 +49,7 @@ $studies      = isset($studies)      ? $studies            : [];
         $cardStudies = $studies[$code] ?? [];
 
         // Base URL fragment for child-card links.
-        $cardBase = $GLOBALS['rootdir'] . '/forms/cardiology/cards/' . attr_url($code);
+        $cardBase = \OpenEMR\Forms\Cardiology\CardiologyContainer::getFormRootUrl() . '/cards/' . attr_url($code);
 
         // Query-string common to all child-card links.
         $qsBase = 'pid=' . attr_url((string)$pid)

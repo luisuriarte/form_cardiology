@@ -25,7 +25,7 @@ use OpenEMR\Forms\Cardiology\CardiologyContainer;
 require_once(__DIR__ . '/../../lib/CardiologyContainer.php');
 
 // 1. CSRF
-if (!CsrfUtils::verifyCsrfToken($_POST['csrf_token_form'] ?? '')) {
+if (!CardiologyContainer::verifyCsrfToken()) {
     CsrfUtils::csrfNotVerified();
 }
 
@@ -330,8 +330,8 @@ if (is_array($stagesPost)) {
 // ---------------------------------------------------------------------------
 // Redirect to view.php
 // ---------------------------------------------------------------------------
-$viewUrl = $GLOBALS['rootdir']
-    . '/forms/cardiology/cards/stress_test/view.php'
+$viewUrl = CardiologyContainer::getFormRootUrl()
+    . '/cards/stress_test/view.php'
     . '?pid='           . urlencode((string)$pid)
     . '&encounter='     . urlencode((string)$encounter)
     . '&cardiology_id=' . urlencode((string)$cardiologyId)

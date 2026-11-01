@@ -88,7 +88,7 @@ $readOnly = false;
     <title><?php echo xlt('Echocardiogram – New Study'); ?></title>
     <?php Header::setupHeader(); ?>
     <link rel="stylesheet"
-          href="<?php echo attr($GLOBALS['webroot']); ?>/interface/forms/cardiology/css/cardiology.css?v=<?php echo attr($GLOBALS['v_js_includes']); ?>">
+          href="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/css/cardiology.css?v=<?php echo attr($GLOBALS['v_js_includes']); ?>">
 </head>
 <body>
 <div class="container-fluid cardiology-container mt-3">
@@ -112,10 +112,10 @@ $readOnly = false;
 
     <form method="post"
           id="echo-form"
-          action="<?php echo attr($GLOBALS['rootdir']); ?>/forms/cardiology/cards/echo/save.php">
+          action="<?php echo attr(CardiologyContainer::getFormRootUrl()); ?>/cards/echo/save.php">
 
         <input type="hidden" name="csrf_token_form"
-               value="<?php echo attr(CsrfUtils::collectCsrfToken()); ?>">
+               value="<?php echo attr(CardiologyContainer::collectCsrfToken()); ?>">
         <input type="hidden" name="pid"           value="<?php echo attr((string)$pid); ?>">
         <input type="hidden" name="encounter"     value="<?php echo attr((string)$encounter); ?>">
         <input type="hidden" name="cardiology_id" value="<?php echo attr((string)$cardiologyId); ?>">
@@ -135,8 +135,8 @@ $readOnly = false;
                         onclick="return confirm(<?php echo xlj('Finalize this study? It will become read-only.'); ?>)">
                     <?php echo xlt('Finalize'); ?>
                 </button>
-                <a href="<?php echo attr($GLOBALS['rootdir']
-                    . '/forms/cardiology/view.php?id=' . urlencode((string)$cardiologyId)); ?>"
+                <a href="<?php echo attr(CardiologyContainer::getFormRootUrl()
+                    . '/view.php?id=' . urlencode((string)$cardiologyId)); ?>"
                    class="btn btn-secondary ms-2"
                    onclick="top.restoreSession()">
                     <?php echo xlt('Cancel'); ?>
@@ -146,6 +146,6 @@ $readOnly = false;
     </form>
 
 </div><!-- .cardiology-container -->
-<script src="<?php echo attr($GLOBALS['webroot']); ?>/interface/forms/cardiology/cards/echo/echo.js?v=<?php echo attr($GLOBALS['v_js_includes']); ?>"></script>
+<script src="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/cards/echo/echo.js?v=<?php echo attr($GLOBALS['v_js_includes']); ?>"></script>
 </body>
 </html>
