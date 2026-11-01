@@ -46,6 +46,7 @@ final class CardAcl
     public static function canEditLists(): bool
     {
         return AclMain::aclCheckCore('admin', 'super')
+            || AclMain::aclCheckCore('encounters', 'coding')
             || AclMain::aclCheckCore(self::ACO_SECTION, self::ACO_LISTS);
     }
 
@@ -55,6 +56,7 @@ final class CardAcl
     public static function canManageSettings(): bool
     {
         return AclMain::aclCheckCore('admin', 'super')
+            || AclMain::aclCheckCore('encounters', 'coding')
             || AclMain::aclCheckCore(self::ACO_SECTION, self::ACO_SETTINGS);
     }
 
@@ -62,12 +64,12 @@ final class CardAcl
      * Can the current user store personal preferences?
      *
      * Personal preferences are scoped to the authenticated user and require
-     * the same patients/med permission used by the clinical cards.
+     * patients/med or encounters/coding permission.
      */
     public static function canUsePersonalSettings(): bool
     {
         return (int)($_SESSION['authUserID'] ?? 0) > 0
-            && AclMain::aclCheckCore('patients', 'med');
+            && (AclMain::aclCheckCore('patients', 'med') || AclMain::aclCheckCore('encounters', 'coding'));
     }
 
     /**

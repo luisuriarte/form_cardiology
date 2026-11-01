@@ -31,7 +31,7 @@ require_once(__DIR__ . '/../../lib/CardiologyContainer.php');
 require_once(__DIR__ . '/../../lib/CardAcl.php');
 require_once(__DIR__ . '/../../lib/CardSettings.php');
 
-if (!AclMain::aclCheckCore('patients', 'med')) {
+if (!AclMain::aclCheckCore('patients', 'med') && !AclMain::aclCheckCore('encounters', 'coding') && !AclMain::aclCheckCore('admin', 'super')) {
     die(xlt('Not authorized'));
 }
 

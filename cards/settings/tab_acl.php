@@ -89,7 +89,7 @@ $acoLabels = [
         <?php endif; ?>
 
         <form method="post"
-              action="<?php echo attr($settingsIndex); ?>/acl_install.php"
+              action="<?php echo attr($formRoot); ?>/cards/settings/acl_install.php"
               class="d-flex justify-content-end">
             <input type="hidden" name="csrf_token_form" value="<?php echo attr($csrfToken); ?>">
             <button type="submit" class="btn btn-primary">

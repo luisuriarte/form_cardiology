@@ -101,8 +101,13 @@ class CardRegistry
             // --- Rule 3: ACL check -------------------------------------------
             $section = (string)($row['acl_section'] ?? 'patients');
             $value   = (string)($row['acl_value']   ?? 'med');
+            $cardType = (string)($row['card_type'] ?? 'study');
             if (!AclMain::aclCheckCore($section, $value)) {
-                continue;
+                if ($cardType === 'tool' && AclMain::aclCheckCore('encounters', 'coding')) {
+                    // Clinical users with encounters/coding are permitted to access tool cards
+                } else {
+                    continue;
+                }
             }
 
             // --- Installation check (card folder + required files) -----------
