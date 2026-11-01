@@ -54,9 +54,6 @@ if ($canManage || $canPersonal) {
     $tabs['cards'] = ['label' => xlt('Cards'), 'icon' => 'fa-th-large'];
     $tabs['preferences'] = ['label' => xlt('Preferences'), 'icon' => 'fa-sliders'];
 }
-if ($canAdmin) {
-    $tabs['acl'] = ['label' => xlt('ACL'), 'icon' => 'fa-lock'];
-}
 
 if (empty($tabs)) {
     die(xlt('Not authorized'));
@@ -81,25 +78,12 @@ if (isset($messageMap[$messageKey])) {
     $message = $messageMap[$messageKey];
 }
 
-$aclResult = trim((string)($_GET['acl'] ?? ''));
-if ($aclResult === 'ok') {
-    $message = xlt('Cardiology ACL objects are installed.');
-} elseif ($aclResult === 'partial') {
-    $message = xlt('Cardiology ACL objects were installed, but some default groups were not found.');
-    $messageClass = 'warning';
-} elseif ($aclResult === 'failed') {
-    $message = xlt('The Cardiology ACL objects could not be installed.');
-    $messageClass = 'danger';
-}
-
-$aclInstalled = CardAcl::isAclInstalled();
 $tableInstalled = CardSettings::isInstalled();
 
 $tabFiles = [
     'lists' => __DIR__ . '/tab_lists.php',
     'cards' => __DIR__ . '/tab_cards.php',
     'preferences' => __DIR__ . '/tab_preferences.php',
-    'acl' => __DIR__ . '/tab_acl.php',
 ];
 
 define('CARDIOLOGY_SETTINGS', true);
@@ -144,16 +128,6 @@ define('CARDIOLOGY_SETTINGS', true);
     </div>
     <?php endif; ?>
 
-    <?php if (!$aclInstalled) : ?>
-    <div class="alert alert-info" role="alert">
-        <i class="fa fa-info-circle me-1" aria-hidden="true"></i>
-        <?php if ($canAdmin) : ?>
-            <?php echo xlt('The custom Cardiology ACL objects are not installed. Use the ACL tab to install them.'); ?>
-        <?php else : ?>
-            <?php echo xlt('The custom Cardiology ACL objects are not installed. Ask an administrator to install them.'); ?>
-        <?php endif; ?>
-    </div>
-    <?php endif; ?>
 
     <ul class="nav nav-tabs cardiology-settings-tabs mb-3" role="tablist">
         <?php foreach ($tabs as $tabKey => $tabInfo) : ?>
