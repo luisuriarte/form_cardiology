@@ -18,6 +18,10 @@ if (!defined('CARDIOLOGY_SETTINGS')) {
     exit;
 }
 
+use OpenEMR\Forms\Cardiology\CardAcl;
+
+require_once(__DIR__ . '/../../lib/CardAcl.php');
+
 if (!CardAcl::canUsePersonalSettings() && !CardAcl::canManageSettings()) {
     die(xlt('Not authorized'));
 }

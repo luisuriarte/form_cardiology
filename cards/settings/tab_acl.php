@@ -17,6 +17,11 @@ if (!defined('CARDIOLOGY_SETTINGS')) {
     exit;
 }
 
+use OpenEMR\Common\Acl\AclMain;
+use OpenEMR\Forms\Cardiology\CardAcl;
+
+require_once(__DIR__ . '/../../lib/CardAcl.php');
+
 if (!AclMain::aclCheckCore('admin', 'super')) {
     die(xlt('Not authorized'));
 }

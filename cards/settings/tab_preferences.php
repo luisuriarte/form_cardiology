@@ -17,8 +17,10 @@ if (!defined('CARDIOLOGY_SETTINGS')) {
     exit;
 }
 
+use OpenEMR\Forms\Cardiology\CardAcl;
 use OpenEMR\Forms\Cardiology\CardSettings;
 
+require_once(__DIR__ . '/../../lib/CardAcl.php');
 require_once(__DIR__ . '/../../lib/CardSettings.php');
 
 if (!CardAcl::canManageSettings() && !CardAcl::canUsePersonalSettings()) {
