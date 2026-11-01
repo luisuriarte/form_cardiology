@@ -41,7 +41,7 @@ final class CardLists
             "SELECT option_id, title
                FROM `list_options`
               WHERE list_id = 'lists'
-                AND option_id LIKE 'card\\_%'
+                AND option_id LIKE 'card_%'
               ORDER BY seq ASC, title ASC",
             []
         );
@@ -52,6 +52,23 @@ final class CardLists
                 continue;
             }
             $lists[$listId] = (string)$row['title'];
+        }
+
+        if ($lists === []) {
+            // Resilient fallback: discover distinct card_* list IDs if registration rows in 'lists' are missing
+            $distinct = sqlStatement(
+                "SELECT DISTINCT list_id
+                   FROM `list_options`
+                  WHERE list_id LIKE 'card_%'
+                  ORDER BY list_id ASC",
+                []
+            );
+            while ($row = sqlFetchArray($distinct)) {
+                $lid = (string)$row['list_id'];
+                if (preg_match(self::LIST_PATTERN, $lid)) {
+                    $lists[$lid] = ucwords(str_replace(['card_', '_'], ['', ' '], $lid));
+                }
+            }
         }
 
         return $lists;

@@ -113,25 +113,31 @@
                 var url = link.getAttribute('data-cardiology-tool-url');
                 var title = link.getAttribute('data-cardiology-tool-title') || '';
 
-                if (!url || typeof window.dlgopen !== 'function') {
+                if (!url) {
                     return;
                 }
-
-                event.preventDefault();
 
                 if (typeof top !== 'undefined' && typeof top.restoreSession === 'function') {
                     top.restoreSession();
                 }
 
-                window.dlgopen(
-                    url,
-                    'cardiologySettings',
-                    1000,
-                    700,
-                    false,
-                    title,
-                    { onClosed: 'reload' }
-                );
+                var dlg = (typeof window.dlgopen === 'function') ? window.dlgopen
+                    : (typeof parent !== 'undefined' && typeof parent.dlgopen === 'function') ? parent.dlgopen
+                    : (typeof top !== 'undefined' && typeof top.dlgopen === 'function') ? top.dlgopen
+                    : null;
+
+                if (dlg) {
+                    event.preventDefault();
+                    dlg(
+                        url,
+                        'cardiologySettings',
+                        1050,
+                        720,
+                        false,
+                        title,
+                        { onClosed: 'reload' }
+                    );
+                }
             });
         });
     }

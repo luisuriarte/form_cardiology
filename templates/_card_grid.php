@@ -127,9 +127,19 @@ if (!empty($pid) && (int)$pid > 0) {
                     <?php echo xlt('Not installed'); ?>
                 </p>
                 <?php elseif ($isTool) : ?>
-                <p class="text-muted small mb-0">
+                <p class="text-muted small mb-3">
                     <?php echo xlt('Manage list catalogs, card activation and preferences.'); ?>
                 </p>
+                <div>
+                    <a href="<?php echo attr($cardBase . '/index.php'); ?>"
+                       class="btn btn-sm btn-primary cardiology-btn-tool"
+                       data-cardiology-tool-url="<?php echo attr($cardBase . '/index.php'); ?>"
+                       data-cardiology-tool-title="<?php echo attr($title); ?>"
+                       onclick="top.restoreSession()">
+                        <i class="fa fa-cog me-1" aria-hidden="true"></i>
+                        <?php echo xlt('Open Settings'); ?>
+                    </a>
+                </div>
                 <?php elseif ($count === 0) : ?>
                 <p class="text-muted small mb-0">
                     <?php echo xlt('No studies for this encounter.'); ?>
