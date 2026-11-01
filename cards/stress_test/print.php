@@ -148,6 +148,14 @@ $phaseLabels = [
           href="<?php echo attr($GLOBALS['webroot']); ?>/public/assets/bootstrap/dist/css/bootstrap.min.css">
     <link rel="stylesheet"
           href="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/css/cardiology.css">
+    <?php
+    if (class_exists(\OpenEMR\Core\Header::class)) {
+        echo \OpenEMR\Core\Header::setupAssets(['chart']);
+    } else {
+        $assets = $GLOBALS['assets_static_relative'] ?? ($GLOBALS['webroot'] . '/public/assets');
+        echo '<script src="' . attr($assets) . '/chart.js/dist/chart.umd.js"></script>';
+    }
+    ?>
     <style>
         body { font-size: 13px; }
         .report-header { border-bottom: 2px solid #dc3545; margin-bottom: 1rem; }
@@ -172,7 +180,7 @@ $phaseLabels = [
 
 <!-- Print button -->
 <div class="no-print mb-3">
-    <button class="btn btn-sm btn-primary" onclick="window.print()">
+    <button class="btn btn-sm btn-primary" onclick="if (window.CardiologyCharts) { window.CardiologyCharts.onReady(function() { window.print(); }); } else { window.print(); }">
         <i class="fa fa-print me-1"></i><?php echo xlt('Print'); ?>
     </button>
     <button class="btn btn-sm btn-secondary ms-2" onclick="window.close()">
@@ -428,6 +436,13 @@ $phaseLabels = [
 </table>
 </div>
 <?php endif; ?>
+
+<!-- Charts -->
+<?php
+$cardCode  = 'stress_test';
+$chartMode = 'print';
+require __DIR__ . '/../../templates/_charts.php';
+?>
 
 <!-- ===================================================================== -->
 <!-- Conclusion                                                              -->

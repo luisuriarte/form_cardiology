@@ -163,3 +163,54 @@
     vertical-align: middle;
 }
 
+/* ==========================================================================
+   Cardiology Charts
+   ========================================================================== */
+
+.cardiology-charts-section {
+    border-color: var(--border-color, #dee2e6);
+}
+
+.cardiology-charts-section .card-header {
+    cursor: pointer;
+    user-select: none;
+}
+
+.cardiology-chart-card {
+    background-color: var(--card-bg, #ffffff);
+    border: 1px solid var(--border-color, #dee2e6);
+    border-radius: 0.375rem;
+}
+
+.cardiology-chart-wrapper {
+    min-height: 200px;
+    height: 220px;
+    width: 100%;
+}
+
+.cardiology-chart-empty {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+}
+
+@media print {
+    .cardiology-charts-section {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+    .cardiology-chart-card {
+        page-break-inside: avoid;
+        break-inside: avoid;
+        border: 1px solid #ccc !important;
+        box-shadow: none !important;
+    }
+    .cardiology-chart-wrapper {
+        min-height: 180px;
+        height: 180px;
+    }
+}
+
+

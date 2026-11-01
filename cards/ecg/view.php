@@ -89,7 +89,7 @@ $statusClass = $readOnly ? 'bg-success' : 'bg-warning text-dark';
 <html>
 <head>
     <title><?php echo xlt('12-Lead ECG – View Study'); ?></title>
-    <?php Header::setupHeader(); ?>
+    <?php Header::setupHeader('chart'); ?>
     <link rel="stylesheet"
           href="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/css/cardiology.css?v=<?php echo attr($GLOBALS['v_js_includes']); ?>">
 </head>
@@ -130,6 +130,12 @@ $statusClass = $readOnly ? 'bg-success' : 'bg-warning text-dark';
         <input type="hidden" name="study_id"      value="<?php echo attr((string)$studyId); ?>">
 
         <?php require __DIR__ . '/_form_fields.php'; ?>
+
+        <?php
+        $cardCode  = 'ecg';
+        $chartMode = 'view';
+        require __DIR__ . '/../../templates/_charts.php';
+        ?>
 
         <div class="row mt-3 mb-4">
             <div class="col-12">

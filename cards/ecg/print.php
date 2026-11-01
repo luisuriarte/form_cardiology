@@ -86,6 +86,14 @@ $statusClass = ($study['status'] === 'final') ? 'text-success' : 'text-warning';
           href="<?php echo attr($GLOBALS['webroot']); ?>/public/assets/bootstrap/dist/css/bootstrap.min.css">
     <link rel="stylesheet"
           href="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/css/cardiology.css">
+    <?php
+    if (class_exists(\OpenEMR\Core\Header::class)) {
+        echo \OpenEMR\Core\Header::setupAssets(['chart']);
+    } else {
+        $assets = $GLOBALS['assets_static_relative'] ?? ($GLOBALS['webroot'] . '/public/assets');
+        echo '<script src="' . attr($assets) . '/chart.js/dist/chart.umd.js"></script>';
+    }
+    ?>
     <style>
         body { font-size: 13px; }
         .report-header { border-bottom: 2px solid #dc3545; margin-bottom: 1rem; }
@@ -105,7 +113,7 @@ $statusClass = ($study['status'] === 'final') ? 'text-success' : 'text-warning';
 <body class="p-3">
 
 <div class="no-print mb-3">
-    <button class="btn btn-sm btn-primary" onclick="window.print()">
+    <button class="btn btn-sm btn-primary" onclick="if (window.CardiologyCharts) { window.CardiologyCharts.onReady(function() { window.print(); }); } else { window.print(); }">
         <i class="fa fa-print me-1"></i><?php echo xlt('Print'); ?>
     </button>
     <button class="btn btn-sm btn-secondary ms-2" onclick="window.close()">
@@ -225,6 +233,13 @@ $statusClass = ($study['status'] === 'final') ? 'text-success' : 'text-warning';
     <?php echo nl2br(text($study['findings'])); ?>
 </div>
 <?php endif; ?>
+
+<!-- Charts -->
+<?php
+$cardCode  = 'ecg';
+$chartMode = 'print';
+require __DIR__ . '/../../templates/_charts.php';
+?>
 
 <div class="conclusion-box">
     <div class="fw-bold text-danger text-uppercase mb-1">
