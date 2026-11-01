@@ -213,4 +213,43 @@
     }
 }
 
+/* -------------------------------------------------------------------------
+ * Study Document Attachments
+ * ------------------------------------------------------------------------- */
+.cardiology-documents-section {
+    border: 1px solid var(--border-color, #dee2e6);
+    border-radius: 0.375rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.05);
+}
+
+.cardiology-documents-section .card-header {
+    border-bottom: 1px solid var(--border-color, #dee2e6);
+    font-size: 0.95rem;
+}
+
+.cardiology-badge-docs {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.25em 0.5em;
+    vertical-align: middle;
+}
+
+#cardiology-docs-table tbody tr td {
+    vertical-align: middle;
+}
+
+#cardiology-upload-panel,
+#cardiology-picker-panel {
+    background-color: #f8fafc;
+    border: 1px dashed #cbd5e1;
+}
+
+.btn-xs {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    border-radius: 0.2rem;
+}
+
+
 

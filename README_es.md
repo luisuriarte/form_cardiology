@@ -697,3 +697,99 @@ Ejecutar estos pasos en una instalación de prueba antes de desplegar en producc
 - [ ] Presionar el botón **Imprimir** y constatar que el cuadro de diálogo del navegador renderiza los gráficos correctamente.
 - [ ] En la vista de consulta, cambiar entre tema claro y oscuro de OpenEMR y comprobar que las fuentes y líneas de cuadrícula se adaptan con legibilidad.
 
+### 14.30 Documentos: Subida de PDF a un estudio en borrador
+- [ ] En `view.php` de un ecocardiograma en borrador, hacer clic en **Subir Archivo** dentro de Documentos Adjuntos.
+- [ ] Seleccionar un informe PDF y presionar **Iniciar Subida**.
+- [ ] Verificar que el archivo aparece de inmediato en la tabla de adjuntos y el contador numérico se incrementa.
+- [ ] En la pestaña general de **Documentos** del paciente en OpenEMR, constatar que el archivo aparece archivado bajo la rama `Cardiología > Ecocardiograma`.
+
+### 14.31 Documentos: Vincular documento existente del paciente
+- [ ] En un estudio en borrador o finalizado, hacer clic en **Adjuntar Existente**.
+- [ ] Seleccionar un documento del paciente no vinculado previamente y presionar **Adjuntar**.
+- [ ] Verificar que el archivo queda enlazado al estudio y se muestra en la tabla.
+
+### 14.32 Documentos: Rechazo de vinculación entre distintos pacientes
+- [ ] Enviar una petición POST manipulada intentando vincular un documento del paciente B a un estudio del paciente A.
+- [ ] Verificar que la API responde con error HTTP 400 (`El documento no pertenece al paciente seleccionado. La vinculación entre distintos pacientes está prohibida.`).
+
+### 14.33 Documentos: Reglas de estado (borrador vs final)
+- [ ] En un estudio en borrador, presionar **Desvincular** en un adjunto y confirmar. Verificar que se desvincula.
+- [ ] Finalizar el estudio.
+- [ ] Constatar que los botones de Desvincular ya no se renderizan en la interfaz.
+- [ ] Enviar un POST manipulado intentando desvincular un documento del estudio finalizado. Verificar que la API lo rechaza con HTTP 422 (`No se pueden desvincular documentos de un estudio finalizado. Los registros finalizados son de solo lectura.`).
+- [ ] Adjuntar un nuevo archivo o documento existente al estudio finalizado. Verificar que se permite y muestra la etiqueta `Agregado posterior a la finalización`.
+
+### 14.34 Documentos: Verificación de permisos de acceso (ACL)
+- [ ] Iniciar sesión con un usuario sin permisos sobre `patients/docs`.
+- [ ] Abrir `view.php` de un estudio. Verificar que la sección muestra un aviso indicando falta de permisos y no expone botones de subida ni vinculación.
+- [ ] Intentar un POST directo a `documents_api.php`. Verificar que es rechazado.
+
+### 14.35 Documentos: Rechazo de extensiones y verificación de MIME
+- [ ] Intentar subir un archivo `.exe` o `.txt`. Constatar el rechazo inmediato.
+- [ ] Renombrar un ejecutable con extensión `.pdf`. Constatar que la verificación del tipo MIME real en el servidor rechaza la subida (`El tipo de contenido ... no coincide con la extensión permitida`).
+- [ ] Intentar subir un archivo que exceda el límite del servidor (ej. > 50 MB). Constatar el rechazo.
+
+### 14.36 Documentos: Protección CSRF y manejo de duplicados
+- [ ] Enviar una solicitud a la API sin token CSRF o con token inválido. Verificar el rechazo HTTP 403.
+- [ ] Intentar vincular dos veces el mismo documento al mismo estudio. Verificar que se devuelve un mensaje amigable: `Este documento ya se encuentra adjunto a este estudio.`.
+
+### 14.37 Documentos: Categoría por defecto y error por categoría faltante
+- [ ] Asignar `card_modules.doc_category_id = NULL` para un módulo. Adjuntar un documento y verificar que se clasifica bajo `22007 Otros Documentos de Cardiología`.
+- [ ] Si tanto la categoría del módulo como la 22007 no existen en la base de datos, verificar que se muestra un error claro instruyendo al administrador a ejecutar el script de actualización y reconstruir el árbol.
+
+### 14.38 Documentos: Registro de auditoría
+- [ ] Subir un archivo, vincular un documento existente y desvincular un adjunto.
+- [ ] Revisar el registro de eventos de OpenEMR. Constatar que se asientan eventos para `doc_attach_upload`, `doc_attach_existing` y `doc_unlink` con usuario, código de módulo, ID de estudio, ID de documento e ID de categoría (sin registrar datos clínicos ni nombres de pacientes en el comentario).
+
+### 14.39 Documentos: Reporte imprimible en PDF
+- [ ] En un estudio con documentos adjuntos, presionar **Imprimir PDF**.
+- [ ] Constatar que se incluye la sección **Documentos Adjuntos** con Título, Categoría y Fecha (sin volcar el contenido físico de los archivos).
+- [ ] En un estudio sin documentos adjuntos, verificar que la sección no se imprime.
+
+### 14.40 Documentos: Contador en las tarjetas del contenedor
+- [ ] Volver a la consulta cardiológica (`view.php`).
+- [ ] Verificar que cada estudio en la grilla muestra un badge con ícono de clip y la cantidad de documentos adjuntos junto al badge de estado, calculado en una única consulta agrupada (sin N+1).
+
+### 14.41 Documentos: Reconstrucción del árbol de categorías
+- [ ] Como superadministrador (`admin/super`), ingresar a `tools/rebuild_category_tree.php`.
+- [ ] Confirmar la ejecución.
+- [ ] Constatar que todas las categorías preexistentes conservan sus identificadores, padres y enlaces a documentos, y la nueva rama de Cardiología queda navegable en el árbol de Documentos.
+
+---
+
+## 15. Arquitectura de documentos adjuntos (`card_documents`)
+
+El módulo integra los estudios clínicos con el repositorio de documentos de OpenEMR mediante una tabla de unión y una jerarquía de categorías dedicada.
+
+### 15.1 Esquema de base de datos
+- **Tabla de unión:** `card_documents`
+  - `id BIGINT AUTO_INCREMENT PRIMARY KEY`
+  - `card_code VARCHAR(32)`: Código del módulo (ej. `echo`, `stress_test`, `ecg`, `preop_risk`, `fitness`).
+  - `study_id BIGINT`: ID del estudio en la tabla correspondiente `form_card_*`.
+  - `pid BIGINT`: ID del paciente (`patient_data.pid`), validado contra la sesión activa.
+  - `document_id BIGINT`: ID en la tabla `documents` de OpenEMR.
+  - `category_id BIGINT`: ID de categoría en `categories` asignada al vincular.
+  - `created_by VARCHAR(255)`: Usuario que realizó la vinculación o subida.
+  - `created_at DATETIME`: Fecha y hora de vinculación.
+  - `activity TINYINT`: Borrado lógico (`1` = activo, `0` = desvinculado).
+  - Índices: `UNIQUE KEY (card_code, study_id, document_id)`, `KEY (pid, card_code, study_id)`, `KEY (document_id)`.
+
+### 15.2 Jerarquía de categorías de cardiología
+Categorías sembradas bajo la raíz principal de documentos (ID `1`):
+| ID Categoría | Nombre de Categoría | ID Padre | Descripción |
+|---|---|---|---|
+| **22000** | Cardiology | 1 | Rama raíz para toda la documentación cardiológica |
+| **22001** | Echocardiogram | 22000 | Ecocardiogramas transtorácicos, transesofágicos y Doppler |
+| **22002** | Stress Test | 22000 | Informes de ergometría y pruebas de esfuerzo |
+| **22003** | ECG | 22000 | Electrocardiogramas de 12 derivaciones en reposo |
+| **22004** | Holter / ABPM | 22000 | Monitoreos Holter de ritmo y presurometrías (MAPA) |
+| **22005** | Preoperative Evaluation | 22000 | Evaluaciones y certificados de riesgo quirúrgico cardiovascular |
+| **22006** | Fitness Certificates | 22000 | Certificados de aptitud física deportiva, laboral y académica |
+| **22007** | Other Cardiology Documents | 22000 | Categoría por defecto para módulos adicionales o documentos varios |
+
+### 15.3 Orden de actualización recomendado
+1. **Respaldo de Base de Datos:** Realizar un respaldo de las tablas `categories`, `categories_seq` y `categories_to_documents`.
+2. **Ejecutar Script SQL:** Correr `sql/upgrade_003_documents.sql` en MariaDB o MySQL.
+3. **Reconstruir Árbol:** Ingresar con rol superadministrador (`admin/super`) a `tools/rebuild_category_tree.php` y ejecutar la reconstrucción para calcular los límites de recorrido preorden (`lft`, `rght`).
+
+

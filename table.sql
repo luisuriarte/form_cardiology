@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS `card_modules` (
   `acl_section` VARCHAR(64) NOT NULL DEFAULT 'patients' COMMENT 'phpGACL section required to open the card',
   `acl_value` VARCHAR(64) NOT NULL DEFAULT 'med' COMMENT 'phpGACL value required to open the card',
   `card_type` VARCHAR(10) NOT NULL DEFAULT 'study' COMMENT 'Module type: study or tool',
+  `doc_category_id` INT NULL COMMENT 'Document category used for attachments of this card',
   `sort_order` INT NOT NULL DEFAULT 100 COMMENT 'Display order in the menu (ascending)',
   `global_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Clinic-wide switch (1 = available, 0 = disabled for everyone)',
   PRIMARY KEY (`code`)
@@ -686,3 +687,59 @@ CREATE TABLE IF NOT EXISTS `form_card_fitness` (
   KEY `idx_pid_encounter` (`pid`, `encounter`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   COMMENT='Cardiology fitness certificate study (one row per study)';
+
+-- -----------------------------------------------------------------------------
+-- Table: card_documents (Document attachments linked to cardiology studies)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `card_documents` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
+  `card_code` VARCHAR(32) NOT NULL COMMENT 'Card code (card_modules.code)',
+  `study_id` BIGINT NOT NULL COMMENT 'Study id in the card table',
+  `pid` BIGINT NOT NULL COMMENT 'Patient id (patient_data.pid)',
+  `document_id` BIGINT NOT NULL COMMENT 'Document id (documents.id)',
+  `category_id` BIGINT NOT NULL COMMENT 'Category id at time of linking (categories.id)',
+  `created_by` VARCHAR(255) DEFAULT NULL COMMENT 'Username of user who attached the document',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Timestamp when attachment was linked',
+  `activity` TINYINT NOT NULL DEFAULT 1 COMMENT 'Soft delete flag (1 = active, 0 = unlinked)',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_card_study_doc` (`card_code`, `study_id`, `document_id`),
+  KEY `idx_pid_card_study` (`pid`, `card_code`, `study_id`),
+  KEY `idx_document_id` (`document_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  COMMENT='Cardiology study document attachments';
+
+-- -----------------------------------------------------------------------------
+-- Category tree seeds under Categories (parent 1)
+-- -----------------------------------------------------------------------------
+INSERT IGNORE INTO `categories`
+  (`id`, `name`, `value`, `parent`, `lft`, `rght`, `aco_spec`, `codes`)
+VALUES
+  (22000, 'Cardiology', '', 1, 0, 0, 'patients|docs', ''),
+  (22001, 'Echocardiogram', '', 22000, 0, 0, 'patients|docs', ''),
+  (22002, 'Stress Test', '', 22000, 0, 0, 'patients|docs', ''),
+  (22003, 'ECG', '', 22000, 0, 0, 'patients|docs', ''),
+  (22004, 'Holter / ABPM', '', 22000, 0, 0, 'patients|docs', ''),
+  (22005, 'Preoperative Evaluation', '', 22000, 0, 0, 'patients|docs', ''),
+  (22006, 'Fitness Certificates', '', 22000, 0, 0, 'patients|docs', ''),
+  (22007, 'Other Cardiology Documents', '', 22000, 0, 0, 'patients|docs', '');
+
+-- -----------------------------------------------------------------------------
+-- Map study cards to their default document category (only where NULL)
+-- -----------------------------------------------------------------------------
+UPDATE `card_modules` SET `doc_category_id` = 22001 WHERE `code` = 'echo' AND `doc_category_id` IS NULL;
+UPDATE `card_modules` SET `doc_category_id` = 22002 WHERE `code` = 'stress_test' AND `doc_category_id` IS NULL;
+UPDATE `card_modules` SET `doc_category_id` = 22003 WHERE `code` = 'ecg' AND `doc_category_id` IS NULL;
+UPDATE `card_modules` SET `doc_category_id` = 22005 WHERE `code` = 'preop_risk' AND `doc_category_id` IS NULL;
+UPDATE `card_modules` SET `doc_category_id` = 22006 WHERE `code` = 'fitness' AND `doc_category_id` IS NULL;
+
+-- -----------------------------------------------------------------------------
+-- Synchronize categories_seq sequence counter
+-- -----------------------------------------------------------------------------
+INSERT INTO `categories_seq` (`id`)
+SELECT MAX(`id`) FROM `categories`
+WHERE NOT EXISTS (SELECT 1 FROM `categories_seq`);
+
+UPDATE `categories_seq`
+SET `id` = (SELECT MAX(`id`) FROM `categories`)
+WHERE `id` < (SELECT MAX(`id`) FROM `categories`);
+

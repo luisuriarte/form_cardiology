@@ -197,7 +197,13 @@ $statusClass = $readOnly ? 'bg-success' : 'bg-warning text-dark';
         <?php endif; ?>
     </form>
 
+    <?php
+    $cardCode = 'echo';
+    require __DIR__ . '/../../templates/_documents.php';
+    ?>
+
 </div>
 <script src="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/cards/echo/echo.js?v=<?php echo attr($GLOBALS['v_js_includes']); ?>"></script>
+<script src="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/js/cardiology-documents.js?v=<?php echo attr($GLOBALS['v_js_includes']); ?>"></script>
 </body>
 </html>

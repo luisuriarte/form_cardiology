@@ -635,3 +635,99 @@ Run these steps on a test installation before deploying to production.
 - [ ] Click the **Print** button and verify the browser print dialog previews the charts sharply.
 - [ ] In the main view, toggle dark/light theme in OpenEMR and verify text and grid colors adapt cleanly.
 
+### 12.29 Documents: Upload PDF to draft study
+- [ ] In a draft echo study `view.php`, click **Upload File** in the Attached Documents section.
+- [ ] Select a PDF report and click **Start Upload**.
+- [ ] Verify the document appears immediately in the attachments table and the count badge increments.
+- [ ] Open the patient's main OpenEMR **Documents** tab and verify the file appears under `Cardiology > Echocardiogram`.
+
+### 12.30 Documents: Attach existing patient document
+- [ ] In a draft or final study, click **Attach Existing**.
+- [ ] Select an existing unlinked document of the same patient from the dropdown and click **Attach**.
+- [ ] Verify the document is linked to the study and appears in the table.
+
+### 12.31 Documents: Cross-patient linking rejected
+- [ ] Send a crafted POST to `documents_api.php` attempting to link a document belonging to patient B into a study of patient A.
+- [ ] Verify the API returns HTTP 400 with `Document does not belong to the selected patient. Cross-patient linking is prohibited.`.
+
+### 12.32 Documents: Status rules (draft vs final)
+- [ ] In a draft study, click **Unlink** on an attachment and confirm. Verify the attachment is unlinked.
+- [ ] Finalize the study.
+- [ ] Verify that Unlink buttons are no longer rendered in the UI.
+- [ ] Send a forged POST attempting to unlink an attachment from the finalized study. Verify the API rejects it with HTTP 422 (`Documents cannot be unlinked from a finalized study.`).
+- [ ] Attach a new document or existing document to the finalized study. Verify it succeeds and displays the badge `Added after finalization`.
+
+### 12.33 Documents: ACL permissions check
+- [ ] Log in as a user without `patients/docs` permission.
+- [ ] Open a study's `view.php`. Verify the Documents section displays an alert stating documents access is not permitted, and no upload/link actions are visible.
+- [ ] Attempt a direct POST to `documents_api.php`. Verify the request is rejected.
+
+### 12.34 Documents: Disallowed extension and spoofed MIME rejected
+- [ ] Attempt to upload an `.exe` or `.txt` file. Verify immediate rejection.
+- [ ] Rename an `.exe` file to `.pdf` and attempt upload. Verify the server-side MIME check rejects it with `File content type ... does not match allowed extension`.
+- [ ] Attempt to upload a file larger than the configured upload ceiling (e.g. > 50 MB). Verify rejection.
+
+### 12.35 Documents: CSRF and duplicate protection
+- [ ] Submit an API request with an invalid or missing CSRF token. Verify HTTP 403 CSRF rejection.
+- [ ] Attempt to attach the same document twice to the same study. Verify the API returns a friendly message: `This document is already attached to this study.`.
+
+### 12.36 Documents: Category fallback and missing category error
+- [ ] Set `card_modules.doc_category_id = NULL` for a card. Attach a document and verify it is filed under fallback category `22007 Other Cardiology Documents`.
+- [ ] If both card category and fallback 22007 are missing from `categories`, verify an actionable error is shown instructing the administrator to run the upgrade script and rebuild the category tree.
+
+### 12.37 Documents: Audit logging
+- [ ] Attach an uploaded file, link an existing document, and unlink an attachment.
+- [ ] Check OpenEMR's `log` table / Event Log. Verify audit records for `doc_attach_upload`, `doc_attach_existing`, and `doc_unlink` containing user, card code, study ID, document ID, and category ID (with zero patient clinical data in comments).
+
+### 12.38 Documents: Print PDF attachments list
+- [ ] Add attachments to a study and click **Print PDF**.
+- [ ] Verify the report renders the **Attached Documents** table listing Document Title, Category, and Date without file contents.
+- [ ] For a study without attachments, verify the Attached Documents section is not printed.
+
+### 12.39 Documents: Container tile counts
+- [ ] Return to the encounter's Cardiology container form (`view.php`).
+- [ ] Verify that each study item in the card tiles displays a badge with a paperclip icon and the count of attached documents next to the status badge, loaded with a single grouped query (no N+1).
+
+### 12.40 Documents: Tree rebuild integrity
+- [ ] As super administrator, navigate to `tools/rebuild_category_tree.php`.
+- [ ] Confirm and execute the tree rebuild.
+- [ ] Verify that all existing OpenEMR categories retain their original IDs, parents, and document links, and the new Cardiology branch is fully browsable in the Documents tree.
+
+---
+
+## 13. Document attachments architecture (`card_documents`)
+
+The module integrates clinical studies with OpenEMR's native Documents repository through a dedicated join table and category branch.
+
+### 13.1 Database schema
+- **Join Table:** `card_documents`
+  - `id BIGINT AUTO_INCREMENT PRIMARY KEY`
+  - `card_code VARCHAR(32)`: Code of the card module (e.g. `echo`, `stress_test`, `ecg`, `preop_risk`, `fitness`).
+  - `study_id BIGINT`: ID of the study in the corresponding `form_card_*` table.
+  - `pid BIGINT`: Patient ID (`patient_data.pid`), strictly validated against the active session.
+  - `document_id BIGINT`: ID in OpenEMR's core `documents` table.
+  - `category_id BIGINT`: Category ID assigned at time of linking.
+  - `created_by VARCHAR(255)`: Username of the user who attached the file.
+  - `created_at DATETIME`: Attachment timestamp.
+  - `activity TINYINT`: Soft-delete flag (`1` = active link, `0` = unlinked).
+  - Indexes: `UNIQUE KEY (card_code, study_id, document_id)`, `KEY (pid, card_code, study_id)`, `KEY (document_id)`.
+
+### 13.2 Cardiology category branch
+Categories seeded under the OpenEMR root document category (ID `1`):
+| Category ID | Category Name | Parent ID | Description |
+|---|---|---|---|
+| **22000** | Cardiology | 1 | Root branch for all cardiology documentation |
+| **22001** | Echocardiogram | 22000 | Doppler, transthoracic and transesophageal echocardiograms |
+| **22002** | Stress Test | 22000 | Ergometry and treadmill stress test reports |
+| **22003** | ECG | 22000 | Resting 12-lead electrocardiograms |
+| **22004** | Holter / ABPM | 22000 | 24-48h ECG Holter and ambulatory blood pressure monitoring |
+| **22005** | Preoperative Evaluation | 22000 | Perioperative cardiac clearance and surgical risk evaluations |
+| **22006** | Fitness Certificates | 22000 | Sports, employment, and academic physical fitness clearances |
+| **22007** | Other Cardiology Documents | 22000 | Default fallback for unmapped cards or general cardiology documents |
+
+### 13.3 Recommended upgrade procedure
+1. **Database Backup:** Back up `categories`, `categories_seq`, and `categories_to_documents`.
+2. **Run Upgrade SQL:** Execute `sql/upgrade_003_documents.sql` in MariaDB/MySQL.
+3. **Rebuild Category Tree:** Log in as a super administrator (`admin/super`) and open `tools/rebuild_category_tree.php`. Click **Rebuild Document Categories Tree** to recompute the nested-set preorder boundaries (`lft`, `rght`) across all categories.
+
+

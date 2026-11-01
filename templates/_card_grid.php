@@ -20,6 +20,21 @@
 $containerId  = isset($containerId)  ? (int)$containerId  : 0;
 $studyCounts  = isset($studyCounts)  ? $studyCounts        : [];
 $studies      = isset($studies)      ? $studies            : [];
+
+// Load document attachment counts for this patient across all studies in one grouped query (no N+1).
+$docCounts = [];
+if (!empty($pid) && (int)$pid > 0) {
+    $resDocs = sqlStatement(
+        "SELECT card_code, study_id, COUNT(*) AS cnt
+         FROM `card_documents`
+         WHERE pid = ? AND activity = 1
+         GROUP BY card_code, study_id",
+        [(int)$pid]
+    );
+    while ($rowDoc = sqlFetchArray($resDocs)) {
+        $docCounts[$rowDoc['card_code'] . '_' . (int)$rowDoc['study_id']] = (int)$rowDoc['cnt'];
+    }
+}
 ?>
 <div class="row mb-3">
     <div class="col-12">
@@ -139,9 +154,19 @@ $studies      = isset($studies)      ? $studies            : [];
                         <span class="cardiology-study-date small">
                             <?php echo $studyDate; ?>
                         </span>
-                        <!-- Status badge -->
-                        <span class="badge <?php echo $isFinal ? 'bg-success' : 'bg-warning text-dark'; ?> cardiology-badge">
-                            <?php echo $isFinal ? xlt('Final') : xlt('Draft'); ?>
+                        <!-- Status & Documents badges -->
+                        <span class="cardiology-study-badges">
+                            <span class="badge <?php echo $isFinal ? 'bg-success' : 'bg-warning text-dark'; ?> cardiology-badge">
+                                <?php echo $isFinal ? xlt('Final') : xlt('Draft'); ?>
+                            </span>
+                            <?php
+                            $studyDocCount = $docCounts[$code . '_' . $studyId] ?? 0;
+                            if ($studyDocCount > 0) : ?>
+                            <span class="badge bg-secondary text-white cardiology-badge-docs ms-1"
+                                  title="<?php echo attr(sprintf(xlt('%d attached document(s)'), $studyDocCount)); ?>">
+                                <i class="fa fa-paperclip" aria-hidden="true"></i> <?php echo text((string)$studyDocCount); ?>
+                            </span>
+                            <?php endif; ?>
                         </span>
                         <!-- Action buttons -->
                         <span class="cardiology-study-actions">

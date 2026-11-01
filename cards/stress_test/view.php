@@ -185,7 +185,13 @@ $statusClass = $readOnly ? 'bg-success' : 'bg-warning text-dark';
         </div>
         <?php endif; ?>
     </form>
+
+    <?php
+    $cardCode = 'stress_test';
+    require __DIR__ . '/../../templates/_documents.php';
+    ?>
 </div>
 <script src="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/cards/stress_test/stress_test.js?v=<?php echo attr($GLOBALS['v_js_includes']); ?>"></script>
+<script src="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/js/cardiology-documents.js?v=<?php echo attr($GLOBALS['v_js_includes']); ?>"></script>
 </body>
 </html>

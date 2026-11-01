@@ -373,6 +373,33 @@ require __DIR__ . '/../../templates/_charts.php';
 </div>
 <?php endif; ?>
 
+<!-- Attached Documents -->
+<?php
+require_once __DIR__ . '/../../lib/CardDocuments.php';
+$attachments = \OpenEMR\Forms\Cardiology\CardDocuments::listForStudy('echo', $studyId, $pid);
+?>
+<?php if (!empty($attachments)) : ?>
+<div class="section-title mt-3"><?php echo xlt('Attached Documents'); ?></div>
+<table class="table table-sm table-bordered mt-2">
+    <thead>
+        <tr>
+            <th><?php echo xlt('Document Title'); ?></th>
+            <th><?php echo xlt('Category'); ?></th>
+            <th><?php echo xlt('Date'); ?></th>
+        </tr>
+    </thead>
+    <tbody>
+        <?php foreach ($attachments as $att) : ?>
+        <tr>
+            <td><?php echo text($att['doc_name'] ?? ''); ?></td>
+            <td><?php echo text(xl($att['category_name'] ?? '')); ?></td>
+            <td><?php echo text($att['doc_date'] ?? $att['linked_at'] ?? ''); ?></td>
+        </tr>
+        <?php endforeach; ?>
+    </tbody>
+</table>
+<?php endif; ?>
+
 <div class="text-muted small mt-3 border-top pt-2">
     <?php echo xlt('Report generated'); ?>: <?php echo date('Y-m-d H:i'); ?>
     &nbsp;&nbsp; <?php echo xlt('Encounter'); ?>: <?php echo text((string)$encounter); ?>

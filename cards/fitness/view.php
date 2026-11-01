@@ -169,8 +169,14 @@ $statusClass = $readOnly ? 'bg-success' : 'bg-warning text-dark';
         </div>
     </form>
 
+    <?php
+    $cardCode = 'fitness';
+    require __DIR__ . '/../../templates/_documents.php';
+    ?>
+
 </div>
 <script src="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/cards/fitness/fitness.js?v=<?php echo attr($GLOBALS['v_js_includes']); ?>"></script>
+<script src="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/js/cardiology-documents.js?v=<?php echo attr($GLOBALS['v_js_includes']); ?>"></script>
 </body>
 </html>
 
