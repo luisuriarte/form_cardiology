@@ -12,7 +12,7 @@
 -- Container: one row per encounter. Child cards reference this row.
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS `form_cardiology` (
-  `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT 'Primary key; also stored as forms.form_id',
+  `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT 'Primary key, also stored as forms.form_id',
   `date` DATETIME DEFAULT NULL COMMENT 'Date and time the container was created',
   `pid` BIGINT(20) NOT NULL COMMENT 'Patient id (patient_data.pid)',
   `encounter` BIGINT(20) NOT NULL COMMENT 'Encounter number (form_encounter.encounter)',
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS `card_modules` (
 CREATE TABLE IF NOT EXISTS `card_config` (
   `id` INT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
   `module_code` VARCHAR(32) NOT NULL COMMENT 'Card code (card_modules.code)',
-  `user_id` BIGINT(20) NOT NULL DEFAULT 0 COMMENT 'users.id; 0 means clinic default',
+  `user_id` BIGINT(20) NOT NULL DEFAULT 0 COMMENT 'users.id - 0 means clinic default',
   `active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Whether the card is shown (1) or hidden (0) for this scope',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_module_user` (`module_code`, `user_id`)
@@ -118,7 +118,7 @@ INSERT IGNORE INTO `list_options`
 
 -- =============================================================================
 -- Card: Doppler Echocardiogram
--- Location: interface/forms/cardiology/table.sql (append after the seeds)
+-- Location: interface/forms/cardiology/table.sql
 --
 -- One row per study. Several studies per encounter are allowed.
 -- Numeric measurements are typed columns so evolution charts (LVEF, diameters,
@@ -234,7 +234,7 @@ INSERT IGNORE INTO `list_options`
 
 -- =============================================================================
 -- Card: Exercise Stress Test (ergometry)
--- Location: interface/forms/cardiology/table.sql (append after form_card_echo)
+-- Location: interface/forms/cardiology/table.sql
 --
 -- Two tables:
 --   form_card_stress_test        -> one row per study (summary and conclusion)
@@ -369,4 +369,3 @@ INSERT IGNORE INTO `list_options`
   ('card_stress_result', 'positive',      'Positive for ischemia',       20, 0, 1),
   ('card_stress_result', 'inconclusive',  'Inconclusive',                30, 0, 1),
   ('card_stress_result', 'submaximal',    'Submaximal (target not reached)', 40, 0, 1);
-
