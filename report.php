@@ -50,7 +50,9 @@ if (!function_exists('form_cardiology_report')) {
         // Load all active card modules to know their titles and table names.
         // Generic: lists studies for EVERY card registered in card_modules dynamically.
         $moduleResult = sqlStatement(
-            'SELECT code, title, table_name FROM `card_modules` WHERE global_active = 1 ORDER BY sort_order ASC',
+            "SELECT code, title, table_name FROM `card_modules`
+              WHERE global_active = 1 AND card_type = 'study'
+              ORDER BY sort_order ASC",
             []
         );
         $modules = [];

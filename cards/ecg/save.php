@@ -135,7 +135,25 @@ if ($studyId > 0) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Validate input data with CardInput
+// 4. Load stored list values so inactive options already saved stay editable
+// ---------------------------------------------------------------------------
+$stored = [];
+if ($studyId > 0) {
+    $storedRow = sqlQuery(
+        'SELECT * FROM `form_card_ecg`
+          WHERE id = ? AND pid = ? AND cardiology_id = ? AND activity = 1
+          LIMIT 1',
+        [$studyId, $pid, $cardiologyId]
+    );
+    $stored = $storedRow ?: [];
+}
+
+$storedValue = static function (string $field) use ($stored): ?string {
+    return isset($stored[$field]) ? (string)$stored[$field] : null;
+};
+
+// ---------------------------------------------------------------------------
+// 5. Validate input data with CardInput
 // ---------------------------------------------------------------------------
 $p = $_POST;
 
@@ -147,17 +165,17 @@ try {
 
     // Rhythm & intervals
     $heartRateBpm = CardInput::int($p['heart_rate_bpm'] ?? null, 'heart_rate_bpm', RANGES['heart_rate_bpm'][0], RANGES['heart_rate_bpm'][1]);
-    $rhythm       = CardInput::listOption('card_ecg_rhythm', $p['rhythm'] ?? null, 'rhythm');
+    $rhythm       = CardInput::listOption('card_ecg_rhythm', $p['rhythm'] ?? null, 'rhythm', $storedValue('rhythm'));
     $axisDeg      = CardInput::int($p['axis_deg'] ?? null, 'axis_deg', RANGES['axis_deg'][0], RANGES['axis_deg'][1]);
     $prMs         = CardInput::int($p['pr_ms'] ?? null, 'pr_ms', RANGES['pr_ms'][0], RANGES['pr_ms'][1]);
     $qrsMs        = CardInput::int($p['qrs_ms'] ?? null, 'qrs_ms', RANGES['qrs_ms'][0], RANGES['qrs_ms'][1]);
     $qtMs         = CardInput::int($p['qt_ms'] ?? null, 'qt_ms', RANGES['qt_ms'][0], RANGES['qt_ms'][1]);
 
     // Conduction & morphology
-    $avConduction   = CardInput::listOption('card_ecg_av_conduction', $p['av_conduction'] ?? null, 'av_conduction');
-    $ventConduction = CardInput::listOption('card_ecg_vent_conduction', $p['ventricular_conduction'] ?? null, 'ventricular_conduction');
-    $hypertrophy    = CardInput::listOption('card_ecg_hypertrophy', $p['hypertrophy'] ?? null, 'hypertrophy');
-    $stTChanges     = CardInput::listOption('card_ecg_st_t', $p['st_t_changes'] ?? null, 'st_t_changes');
+    $avConduction   = CardInput::listOption('card_ecg_av_conduction', $p['av_conduction'] ?? null, 'av_conduction', $storedValue('av_conduction'));
+    $ventConduction = CardInput::listOption('card_ecg_vent_conduction', $p['ventricular_conduction'] ?? null, 'ventricular_conduction', $storedValue('ventricular_conduction'));
+    $hypertrophy    = CardInput::listOption('card_ecg_hypertrophy', $p['hypertrophy'] ?? null, 'hypertrophy', $storedValue('hypertrophy'));
+    $stTChanges     = CardInput::listOption('card_ecg_st_t', $p['st_t_changes'] ?? null, 'st_t_changes', $storedValue('st_t_changes'));
     $stTDetail      = CardInput::text($p['st_t_detail'] ?? null);
     $pathologicQ    = CardInput::flag($p['pathologic_q'] ?? null);
     $qLeads         = CardInput::text($p['q_leads'] ?? null);

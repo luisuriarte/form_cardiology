@@ -21,13 +21,18 @@ namespace OpenEMR\Forms\Cardiology;
 
 require_once __DIR__ . '/CardiologyContainer.php';
 require_once __DIR__ . '/CardRegistry.php';
+require_once __DIR__ . '/CardSettings.php';
 
 final class CardCharts
 {
     /**
      * Maximum number of historical studies to plot in longitudinal charts.
+     * The clinic can change this between 10 and 200 from the settings screen.
      */
-    private const MAX_STUDIES = 60;
+    private function maxStudies(): int
+    {
+        return CardSettings::getClinicInt('chart_max_studies');
+    }
 
     /**
      * Load chart definitions from cards/<code>/charts.php.
@@ -42,7 +47,12 @@ final class CardCharts
         }
 
         // Verify card is registered in card_modules
-        $module = sqlQuery('SELECT code, table_name FROM card_modules WHERE code = ? LIMIT 1', [$code]);
+        $module = sqlQuery(
+            "SELECT code, table_name FROM card_modules
+              WHERE code = ? AND card_type = 'study'
+              LIMIT 1",
+            [$code]
+        );
         if (!$module || empty($module['table_name'])) {
             return [];
         }
@@ -81,7 +91,12 @@ final class CardCharts
         }
 
         // Validate table name from card_modules
-        $module = sqlQuery('SELECT table_name FROM card_modules WHERE code = ? LIMIT 1', [$code]);
+        $module = sqlQuery(
+            "SELECT table_name FROM card_modules
+              WHERE code = ? AND card_type = 'study'
+              LIMIT 1",
+            [$code]
+        );
         $tableName = $module['table_name'] ?? '';
         if (!preg_match('/^form_card_[a-z0-9_]+$/', $tableName)) {
             return [];
@@ -106,18 +121,20 @@ final class CardCharts
 
         $escapedTable = escape_table_name($tableName);
 
-        // Fetch up to MAX_STUDIES studies: final ones plus the current study if open
+        // Fetch a bounded number of studies: final ones plus the current
+        // study when it is still open. The clinic controls the bound.
+        $maxStudies = $this->maxStudies();
         if ($currentStudyId !== null && $currentStudyId > 0) {
             $sql = "SELECT {$columnSql} FROM {$escapedTable}
                     WHERE pid = ? AND activity = 1 AND (status = 'final' OR id = ?)
                     ORDER BY study_date DESC, id DESC
-                    LIMIT " . self::MAX_STUDIES;
+                    LIMIT " . $maxStudies;
             $res = sqlStatement($sql, [$pid, $currentStudyId]);
         } else {
             $sql = "SELECT {$columnSql} FROM {$escapedTable}
                     WHERE pid = ? AND activity = 1 AND status = 'final'
                     ORDER BY study_date DESC, id DESC
-                    LIMIT " . self::MAX_STUDIES;
+                    LIMIT " . $maxStudies;
             $res = sqlStatement($sql, [$pid]);
         }
 
@@ -230,7 +247,12 @@ final class CardCharts
         }
 
         // Validate card table and ensure study belongs to patient and is active
-        $module = sqlQuery('SELECT table_name FROM card_modules WHERE code = ? LIMIT 1', [$code]);
+        $module = sqlQuery(
+            "SELECT table_name FROM card_modules
+              WHERE code = ? AND card_type = 'study'
+              LIMIT 1",
+            [$code]
+        );
         $tableName = $module['table_name'] ?? '';
         if (!preg_match('/^form_card_[a-z0-9_]+$/', $tableName)) {
             return [];

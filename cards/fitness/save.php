@@ -136,7 +136,25 @@ if ($studyId > 0) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Validate input data with CardInput
+// 4. Load stored list values so inactive options already saved stay editable
+// ---------------------------------------------------------------------------
+$stored = [];
+if ($studyId > 0) {
+    $storedRow = sqlQuery(
+        'SELECT * FROM `form_card_fitness`
+          WHERE id = ? AND pid = ? AND cardiology_id = ? AND activity = 1
+          LIMIT 1',
+        [$studyId, $pid, $cardiologyId]
+    );
+    $stored = $storedRow ?: [];
+}
+
+$storedValue = static function (string $field) use ($stored): ?string {
+    return isset($stored[$field]) ? (string)$stored[$field] : null;
+};
+
+// ---------------------------------------------------------------------------
+// 5. Validate input data with CardInput
 // ---------------------------------------------------------------------------
 $p = $_POST;
 
@@ -144,7 +162,7 @@ try {
     $studyDate = CardInput::dateTime($p['study_date'] ?? null, 'study_date');
 
     // Purpose & context
-    $purpose       = CardInput::listOption('card_fitness_purpose', $p['purpose'] ?? null, 'purpose');
+    $purpose       = CardInput::listOption('card_fitness_purpose', $p['purpose'] ?? null, 'purpose', $storedValue('purpose'));
     $purposeDetail = CardInput::text($p['purpose_detail'] ?? null);
 
     // Symptoms & history
@@ -160,12 +178,12 @@ try {
     $examFindings = CardInput::text($p['exam_findings'] ?? null);
 
     // ECG & additional studies
-    $ecgResult         = CardInput::listOption('card_fitness_ecg', $p['ecg_result'] ?? null, 'ecg_result');
+    $ecgResult         = CardInput::listOption('card_fitness_ecg', $p['ecg_result'] ?? null, 'ecg_result', $storedValue('ecg_result'));
     $ecgNote           = CardInput::text($p['ecg_note'] ?? null);
     $additionalStudies = CardInput::text($p['additional_studies'] ?? null);
 
     // Determination & validity
-    $determination = CardInput::listOption('card_fitness_determination', $p['determination'] ?? null, 'determination');
+    $determination = CardInput::listOption('card_fitness_determination', $p['determination'] ?? null, 'determination', $storedValue('determination'));
     $restrictions  = CardInput::text($p['restrictions'] ?? null);
 
     $validUntilRaw = trim((string)($p['valid_until'] ?? ''));

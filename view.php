@@ -83,6 +83,13 @@ foreach ($cards as $card) {
     $code      = (string)$card['code'];
     $tableName = (string)$card['table_name'];
 
+    // Tool cards do not own clinical studies; only study cards are counted.
+    if ((string)($card['card_type'] ?? 'study') !== 'study') {
+        $studyCounts[$code] = 0;
+        $studies[$code]     = [];
+        continue;
+    }
+
     if (!$card['installed']) {
         $studyCounts[$code] = 0;
         $studies[$code]     = [];

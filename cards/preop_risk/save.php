@@ -136,7 +136,25 @@ if ($studyId > 0) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Validate input data with CardInput
+// 4. Load stored list values so inactive options already saved stay editable
+// ---------------------------------------------------------------------------
+$stored = [];
+if ($studyId > 0) {
+    $storedRow = sqlQuery(
+        'SELECT * FROM `form_card_preop_risk`
+          WHERE id = ? AND pid = ? AND cardiology_id = ? AND activity = 1
+          LIMIT 1',
+        [$studyId, $pid, $cardiologyId]
+    );
+    $stored = $storedRow ?: [];
+}
+
+$storedValue = static function (string $field) use ($stored): ?string {
+    return isset($stored[$field]) ? (string)$stored[$field] : null;
+};
+
+// ---------------------------------------------------------------------------
+// 5. Validate input data with CardInput
 // ---------------------------------------------------------------------------
 $p = $_POST;
 
@@ -154,8 +172,8 @@ try {
         }
         $surgeryDate = $surgeryDateRaw;
     }
-    $surgeryUrgency   = CardInput::listOption('card_surgery_urgency', $p['surgery_urgency'] ?? null, 'surgery_urgency');
-    $surgeryRiskClass = CardInput::listOption('card_surgery_risk', $p['surgery_risk_class'] ?? null, 'surgery_risk_class');
+    $surgeryUrgency   = CardInput::listOption('card_surgery_urgency', $p['surgery_urgency'] ?? null, 'surgery_urgency', $storedValue('surgery_urgency'));
+    $surgeryRiskClass = CardInput::listOption('card_surgery_risk', $p['surgery_risk_class'] ?? null, 'surgery_risk_class', $storedValue('surgery_risk_class'));
 
     // Vitals & measurements
     $heightCm    = CardInput::decimal($p['height_cm'] ?? null, 'height_cm', RANGES['height_cm'][0], RANGES['height_cm'][1]);
@@ -163,8 +181,8 @@ try {
     $heartRateBpm= CardInput::int($p['heart_rate_bpm'] ?? null, 'heart_rate_bpm', RANGES['heart_rate_bpm'][0], RANGES['heart_rate_bpm'][1]);
     $bpSys       = CardInput::int($p['bp_systolic_mmhg'] ?? null, 'bp_systolic_mmhg', RANGES['bp_systolic_mmhg'][0], RANGES['bp_systolic_mmhg'][1]);
     $bpDia       = CardInput::int($p['bp_diastolic_mmhg'] ?? null, 'bp_diastolic_mmhg', RANGES['bp_diastolic_mmhg'][0], RANGES['bp_diastolic_mmhg'][1]);
-    $functionalCap = CardInput::listOption('card_functional_capacity', $p['functional_capacity'] ?? null, 'functional_capacity');
-    $asaClass    = CardInput::listOption('card_asa_class', $p['asa_class'] ?? null, 'asa_class');
+    $functionalCap = CardInput::listOption('card_functional_capacity', $p['functional_capacity'] ?? null, 'functional_capacity', $storedValue('functional_capacity'));
+    $asaClass    = CardInput::listOption('card_asa_class', $p['asa_class'] ?? null, 'asa_class', $storedValue('asa_class'));
     $lvefPct     = CardInput::decimal($p['lvef_pct'] ?? null, 'lvef_pct', RANGES['lvef_pct'][0], RANGES['lvef_pct'][1]);
 
     // Lee RCRI flags
@@ -182,7 +200,7 @@ try {
     $labsNote        = CardInput::text($p['labs_note'] ?? null);
 
     // Recommendation & Conclusion
-    $recommendation   = CardInput::listOption('card_preop_recommendation', $p['recommendation'] ?? null, 'recommendation');
+    $recommendation   = CardInput::listOption('card_preop_recommendation', $p['recommendation'] ?? null, 'recommendation', $storedValue('recommendation'));
     $periopRecom      = CardInput::text($p['perioperative_recommendations'] ?? null);
     $conclusion       = CardInput::text($p['conclusion'] ?? null);
     $comments         = CardInput::text($p['comments'] ?? null);

@@ -69,23 +69,36 @@ if ($container === null) {
     die(xlt('The cardiology record is not available or has been deleted.'));
 }
 
-function echoLoadListV(string $listId): array
+function echoLoadListV(string $listId, array $currentValues = []): array
 {
-    $opts = [];
-    $res  = sqlStatement(
-        "SELECT option_id, title FROM list_options WHERE list_id = ? AND activity = 1 ORDER BY seq ASC",
+    $current = array_values(array_map(static fn($value): string => (string)$value, $currentValues));
+    $opts    = [];
+    $res     = sqlStatement(
+        'SELECT option_id, title, activity
+           FROM list_options
+          WHERE list_id = ?
+          ORDER BY seq ASC',
         [$listId]
     );
     while ($row = sqlFetchArray($res)) {
-        $opts[] = $row;
+        if ((int)$row['activity'] === 1 || in_array((string)$row['option_id'], $current, true)) {
+            $opts[] = $row;
+        }
     }
     return $opts;
 }
 
-$valveGrades    = echoLoadListV('card_valve_grade');
-$wallMotions    = echoLoadListV('card_wall_motion');
-$effusionGrades = echoLoadListV('card_effusion_grade');
-$efMethods      = echoLoadListV('card_ef_method');
+$valveGrades = echoLoadListV('card_valve_grade', [
+    $study['ao_regurg_grade'] ?? '',
+    $study['ao_stenosis_grade'] ?? '',
+    $study['mv_regurg_grade'] ?? '',
+    $study['mv_stenosis_grade'] ?? '',
+    $study['tv_regurg_grade'] ?? '',
+    $study['pv_regurg_grade'] ?? '',
+]);
+$wallMotions    = echoLoadListV('card_wall_motion', [$study['wall_motion'] ?? '']);
+$effusionGrades = echoLoadListV('card_effusion_grade', [$study['pericardial_effusion'] ?? '']);
+$efMethods      = echoLoadListV('card_ef_method', [$study['lvef_method'] ?? '']);
 
 $statusLabel = $readOnly ? xlt('Final') : xlt('Draft');
 $statusClass = $readOnly ? 'bg-success' : 'bg-warning text-dark';

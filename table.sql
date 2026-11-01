@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS `card_modules` (
   `table_name` VARCHAR(64) NOT NULL COMMENT 'Table holding the data of this card (form_card_*)',
   `acl_section` VARCHAR(64) NOT NULL DEFAULT 'patients' COMMENT 'phpGACL section required to open the card',
   `acl_value` VARCHAR(64) NOT NULL DEFAULT 'med' COMMENT 'phpGACL value required to open the card',
+  `card_type` VARCHAR(10) NOT NULL DEFAULT 'study' COMMENT 'Module type: study or tool',
   `sort_order` INT NOT NULL DEFAULT 100 COMMENT 'Display order in the menu (ascending)',
   `global_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Clinic-wide switch (1 = available, 0 = disabled for everyone)',
   PRIMARY KEY (`code`)
@@ -58,12 +59,63 @@ CREATE TABLE IF NOT EXISTS `card_config` (
   COMMENT='Per-user and per-clinic activation of cards';
 
 -- -----------------------------------------------------------------------------
+-- Generic clinic and per-user settings for the Cardiology module
+-- scope = 'clinic' stores rows with user_id = 0
+-- scope = 'user' stores one row per users.id and setting_key
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `card_settings` (
+  `id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
+  `scope` VARCHAR(10) NOT NULL DEFAULT 'clinic' COMMENT 'Setting scope: clinic or user',
+  `user_id` BIGINT(20) NOT NULL DEFAULT 0 COMMENT 'users.id - 0 for clinic settings',
+  `setting_key` VARCHAR(64) NOT NULL COMMENT 'Validated setting identifier',
+  `setting_value` TEXT COMMENT 'Value stored as text',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Creation timestamp',
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Last update timestamp',
+  `updated_by` VARCHAR(255) DEFAULT NULL COMMENT 'Username of the last editor',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_scope_user_key` (`scope`, `user_id`, `setting_key`),
+  KEY `idx_setting_key` (`setting_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  COMMENT='Clinic and per-user settings for Cardiology';
+
+-- -----------------------------------------------------------------------------
+-- Idempotent upgrade: add card_modules.card_type on installations created
+-- before the settings tool card was introduced. New installations already
+-- have the column from the CREATE TABLE above.
+-- -----------------------------------------------------------------------------
+SET @card_type_exists := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'card_modules'
+    AND COLUMN_NAME = 'card_type'
+);
+
+SET @card_type_sql := IF(
+  @card_type_exists = 0,
+  'ALTER TABLE `card_modules` ADD COLUMN `card_type` VARCHAR(10) NOT NULL DEFAULT ''study'' COMMENT ''Module type: study or tool'' AFTER `acl_value`',
+  'SELECT 1'
+);
+
+PREPARE card_type_stmt FROM @card_type_sql;
+
+EXECUTE card_type_stmt;
+
+DEALLOCATE PREPARE card_type_stmt;
+
+-- -----------------------------------------------------------------------------
 -- Seed: initial cards (echocardiogram and exercise stress test)
 -- -----------------------------------------------------------------------------
 INSERT IGNORE INTO `card_modules`
   (`code`, `title`, `icon`, `table_name`, `sort_order`) VALUES
   ('echo',        'Doppler Echocardiogram', 'fa-heartbeat', 'form_card_echo',        10),
   ('stress_test', 'Exercise Stress Test',   'fa-running',   'form_card_stress_test', 20);
+
+-- -----------------------------------------------------------------------------
+-- Seed: settings tool card. Tool cards do not own a clinical table.
+-- -----------------------------------------------------------------------------
+INSERT IGNORE INTO `card_modules`
+  (`code`, `title`, `icon`, `table_name`, `acl_section`, `acl_value`, `card_type`, `sort_order`, `global_active`) VALUES
+  ('settings', 'Settings', 'fa-cog', '', 'patients', 'med', 'tool', 900, 1);
 
 
 -- =============================================================================

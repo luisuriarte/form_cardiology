@@ -157,7 +157,25 @@ if ($studyId > 0) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Validate input data with CardInput
+// 4. Load stored list values so inactive options already saved stay editable
+// ---------------------------------------------------------------------------
+$stored = [];
+if ($studyId > 0) {
+    $storedRow = sqlQuery(
+        'SELECT * FROM `form_card_stress_test`
+          WHERE id = ? AND pid = ? AND cardiology_id = ? AND activity = 1
+          LIMIT 1',
+        [$studyId, $pid, $cardiologyId]
+    );
+    $stored = $storedRow ?: [];
+}
+
+$storedValue = static function (string $field) use ($stored): ?string {
+    return isset($stored[$field]) ? (string)$stored[$field] : null;
+};
+
+// ---------------------------------------------------------------------------
+// 5. Validate input data with CardInput
 // ---------------------------------------------------------------------------
 $p = $_POST;
 
@@ -170,7 +188,7 @@ try {
     $weightKg        = CardInput::decimal($p['weight_kg'] ?? null, 'weight_kg', RANGES['weight_kg'][0], RANGES['weight_kg'][1]);
     $onBetaBlocker   = CardInput::flag($p['on_beta_blocker'] ?? null);
     $medicationsNote = CardInput::text($p['medications_note'] ?? null);
-    $protocol        = CardInput::listOption('card_stress_protocol', $p['protocol'] ?? null, 'protocol');
+    $protocol        = CardInput::listOption('card_stress_protocol', $p['protocol'] ?? null, 'protocol', $storedValue('protocol'));
     $restEcgFindings = CardInput::text($p['rest_ecg_findings'] ?? null);
 
     // Baseline values
@@ -184,11 +202,11 @@ try {
     $peakBpDia        = CardInput::int($p['peak_bp_diastolic_mmhg'] ?? null, 'peak_bp_diastolic_mmhg', RANGES['peak_bp_diastolic_mmhg'][0], RANGES['peak_bp_diastolic_mmhg'][1]);
     $exerciseDuration = CardInput::int($p['exercise_duration_s'] ?? null, 'exercise_duration_s', RANGES['exercise_duration_s'][0], RANGES['exercise_duration_s'][1]);
     $metsAchieved     = CardInput::decimal($p['mets_achieved'] ?? null, 'mets_achieved', RANGES['mets_achieved'][0], RANGES['mets_achieved'][1]);
-    $bpResponse       = CardInput::listOption('card_bp_response', $p['bp_response'] ?? null, 'bp_response');
+    $bpResponse       = CardInput::listOption('card_bp_response', $p['bp_response'] ?? null, 'bp_response', $storedValue('bp_response'));
     $hrRecovery1min   = CardInput::int($p['hr_recovery_1min_bpm'] ?? null, 'hr_recovery_1min_bpm', RANGES['hr_recovery_1min_bpm'][0], RANGES['hr_recovery_1min_bpm'][1]);
 
     // Symptoms, ST segment and arrhythmias
-    $symptom      = CardInput::listOption('card_stress_symptom', $p['symptom'] ?? null, 'symptom');
+    $symptom      = CardInput::listOption('card_stress_symptom', $p['symptom'] ?? null, 'symptom', $storedValue('symptom'));
     $anginaIndex  = CardInput::int($p['angina_index'] ?? null, 'angina_index', RANGES['angina_index'][0], RANGES['angina_index'][1]);
     $stDepression = CardInput::decimal($p['st_depression_mm'] ?? null, 'st_depression_mm', RANGES['st_depression_mm'][0], RANGES['st_depression_mm'][1]);
     $stElevation  = CardInput::decimal($p['st_elevation_mm'] ?? null, 'st_elevation_mm', RANGES['st_elevation_mm'][0], RANGES['st_elevation_mm'][1]);
@@ -197,8 +215,8 @@ try {
     $arrhythmias  = CardInput::text($p['arrhythmias'] ?? null);
 
     // Result & Report
-    $stopReason = CardInput::listOption('card_stop_reason', $p['stop_reason'] ?? null, 'stop_reason');
-    $result     = CardInput::listOption('card_stress_result', $p['result'] ?? null, 'result');
+    $stopReason = CardInput::listOption('card_stop_reason', $p['stop_reason'] ?? null, 'stop_reason', $storedValue('stop_reason'));
+    $result     = CardInput::listOption('card_stress_result', $p['result'] ?? null, 'result', $storedValue('result'));
     $conclusion = CardInput::text($p['conclusion'] ?? null);
     $comments   = CardInput::text($p['comments'] ?? null);
 

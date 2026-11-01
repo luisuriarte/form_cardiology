@@ -52,8 +52,8 @@ class CardRegistry
      */
     public function __construct(?string $cardsBasePath = null)
     {
-        $this->cardsBasePath = $cardsBasePath
-            ?? realpath(__DIR__ . '/../cards');
+        $resolved = $cardsBasePath ?? realpath(__DIR__ . '/../cards');
+        $this->cardsBasePath = $resolved !== false ? $resolved : (__DIR__ . '/../cards');
     }
 
     // -------------------------------------------------------------------------
@@ -106,7 +106,8 @@ class CardRegistry
             }
 
             // --- Installation check (card folder + required files) -----------
-            $row['installed'] = $this->isInstalled($code);
+            $cardType = (string)($row['card_type'] ?? 'study');
+            $row['installed'] = $this->isInstalled($code, $cardType);
 
             $visible[] = $row;
         }
@@ -129,7 +130,10 @@ class CardRegistry
     public function canWrite(string $code, int $userId): bool
     {
         $mod = sqlQuery(
-            'SELECT code, acl_section, acl_value, global_active FROM `card_modules` WHERE code = ? LIMIT 1',
+            'SELECT code, acl_section, acl_value, global_active
+               FROM `card_modules`
+              WHERE code = ? AND card_type = \'study\'
+              LIMIT 1',
             [$code]
         );
         if (!$mod || empty($mod['code']) || (int)$mod['global_active'] !== 1) {
@@ -205,24 +209,31 @@ class CardRegistry
     }
 
     /**
-     * Check whether the card folder and its three required PHP files exist.
+     * Check whether the card folder and its required PHP files exist.
      *
-     * Required files: new.php, view.php (or save.php as proxy), print.php.
-     * A card is considered "installed" when new.php, save.php and print.php
-     * all exist inside cards/<code>/.
+     * Study cards require new.php, save.php and print.php.
+     * Tool cards require index.php and do not own clinical studies.
      *
-     * @param  string $code Card code (e.g. "echo", "stress_test").
+     * @param  string $code     Card code (e.g. "echo", "settings").
+     * @param  string $cardType Module type: study or tool.
      * @return bool
      */
-    private function isInstalled(string $code): bool
+    private function isInstalled(string $code, string $cardType = 'study'): bool
     {
+        if (!preg_match('/^[a-z0-9_]+$/', $code)) {
+            return false;
+        }
+
         $dir = $this->cardsBasePath . DIRECTORY_SEPARATOR . $code;
 
         if (!is_dir($dir)) {
             return false;
         }
 
-        $required = ['new.php', 'save.php', 'print.php'];
+        $required = ($cardType === 'tool')
+            ? ['index.php']
+            : ['new.php', 'save.php', 'print.php'];
+
         foreach ($required as $file) {
             if (!file_exists($dir . DIRECTORY_SEPARATOR . $file)) {
                 return false;

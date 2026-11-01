@@ -105,6 +105,38 @@
     }
 
     // -------------------------------------------------------------------------
+    // Open tool cards (Settings) in an OpenEMR dialog iframe
+    // -------------------------------------------------------------------------
+    function initToolCardModal() {
+        document.querySelectorAll('.cardiology-btn-tool').forEach(function (link) {
+            link.addEventListener('click', function (event) {
+                var url = link.getAttribute('data-cardiology-tool-url');
+                var title = link.getAttribute('data-cardiology-tool-title') || '';
+
+                if (!url || typeof window.dlgopen !== 'function') {
+                    return;
+                }
+
+                event.preventDefault();
+
+                if (typeof top !== 'undefined' && typeof top.restoreSession === 'function') {
+                    top.restoreSession();
+                }
+
+                window.dlgopen(
+                    url,
+                    'cardiologySettings',
+                    1000,
+                    700,
+                    false,
+                    title,
+                    { onClosed: 'reload' }
+                );
+            });
+        });
+    }
+
+    // -------------------------------------------------------------------------
     // Entry point
     // -------------------------------------------------------------------------
     document.addEventListener('DOMContentLoaded', function () {
@@ -112,6 +144,7 @@
         autoDismissAlerts();
         initUnsavedWarning();
         initCardLinks();
+        initToolCardModal();
     });
 
 }(typeof jQuery !== 'undefined' ? jQuery : { fn: {} }));

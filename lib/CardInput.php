@@ -158,15 +158,20 @@ final class CardInput
     }
 
     /**
-     * Validate that a value exists in OpenEMR list_options with active = 1.
+     * Validate that a value exists in OpenEMR list_options.
      *
-     * @param  string      $listId OpenEMR list identifier (e.g. 'card_valve_grade').
-     * @param  mixed       $v      Option ID to validate.
-     * @param  string      $field  Field name for error reporting.
+     * Active options are always accepted. An inactive option is accepted only
+     * when it matches the value already stored for the record being edited,
+     * so historical data remains editable after a list option is deactivated.
+     *
+     * @param  string      $listId      OpenEMR list identifier (e.g. 'card_valve_grade').
+     * @param  mixed       $v           Option ID to validate.
+     * @param  string      $field       Field name for error reporting.
+     * @param  string|null $currentValue Previously stored value, if any.
      * @return string|null Validated option ID or null if empty.
      * @throws InvalidArgumentException If non-empty value does not exist in list_options.
      */
-    public static function listOption(string $listId, mixed $v, string $field): ?string
+    public static function listOption(string $listId, mixed $v, string $field, ?string $currentValue = null): ?string
     {
         if ($v === null) {
             return null;
@@ -178,11 +183,19 @@ final class CardInput
         }
 
         $row = sqlQuery(
-            'SELECT option_id FROM `list_options` WHERE list_id = ? AND option_id = ? AND activity = 1 LIMIT 1',
+            'SELECT option_id, activity FROM `list_options`
+              WHERE list_id = ? AND option_id = ?
+              LIMIT 1',
             [$listId, $str]
         );
 
-        if (!$row || empty($row['option_id'])) {
+        $isActive = $row && (int)($row['activity'] ?? 0) === 1;
+        $isCurrent = $currentValue !== null
+            && $str === trim($currentValue)
+            && $row
+            && (string)$row['option_id'] === $str;
+
+        if (!$isActive && !$isCurrent) {
             throw new InvalidArgumentException(sprintf("Field '%s' contains an invalid option for list '%s'.", $field, $listId));
         }
 

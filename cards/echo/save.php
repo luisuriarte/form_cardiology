@@ -165,7 +165,25 @@ if ($studyId > 0) {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Validate input data with CardInput
+// 4. Load stored list values so inactive options already saved stay editable
+// ---------------------------------------------------------------------------
+$stored = [];
+if ($studyId > 0) {
+    $storedRow = sqlQuery(
+        'SELECT * FROM `form_card_echo`
+          WHERE id = ? AND pid = ? AND cardiology_id = ? AND activity = 1
+          LIMIT 1',
+        [$studyId, $pid, $cardiologyId]
+    );
+    $stored = $storedRow ?: [];
+}
+
+$storedValue = static function (string $field) use ($stored): ?string {
+    return isset($stored[$field]) ? (string)$stored[$field] : null;
+};
+
+// ---------------------------------------------------------------------------
+// 5. Validate input data with CardInput
 // ---------------------------------------------------------------------------
 $p = $_POST;
 
@@ -188,9 +206,9 @@ try {
     $lvedv            = CardInput::decimal($p['lvedv_ml'] ?? null, 'lvedv_ml', RANGES['lvedv_ml'][0], RANGES['lvedv_ml'][1]);
     $lvesv            = CardInput::decimal($p['lvesv_ml'] ?? null, 'lvesv_ml', RANGES['lvesv_ml'][0], RANGES['lvesv_ml'][1]);
     $lvef             = CardInput::decimal($p['lvef_pct'] ?? null, 'lvef_pct', RANGES['lvef_pct'][0], RANGES['lvef_pct'][1]);
-    $lvefMethod       = CardInput::listOption('card_ef_method', $p['lvef_method'] ?? null, 'lvef_method');
+    $lvefMethod       = CardInput::listOption('card_ef_method', $p['lvef_method'] ?? null, 'lvef_method', $storedValue('lvef_method'));
     $lvMass           = CardInput::decimal($p['lv_mass_g'] ?? null, 'lv_mass_g', RANGES['lv_mass_g'][0], RANGES['lv_mass_g'][1]);
-    $wallMotion       = CardInput::listOption('card_wall_motion', $p['wall_motion'] ?? null, 'wall_motion');
+    $wallMotion       = CardInput::listOption('card_wall_motion', $p['wall_motion'] ?? null, 'wall_motion', $storedValue('wall_motion'));
     $wallMotionDetail = CardInput::text($p['wall_motion_detail'] ?? null);
 
     // LV diastolic
@@ -219,21 +237,21 @@ try {
     $ascAorta = CardInput::decimal($p['asc_aorta_mm'] ?? null, 'asc_aorta_mm', RANGES['asc_aorta_mm'][0], RANGES['asc_aorta_mm'][1]);
 
     // Valves
-    $aoRegurg      = CardInput::listOption('card_valve_grade', $p['ao_regurg_grade'] ?? null, 'ao_regurg_grade');
-    $aoStenosis    = CardInput::listOption('card_valve_grade', $p['ao_stenosis_grade'] ?? null, 'ao_stenosis_grade');
+    $aoRegurg      = CardInput::listOption('card_valve_grade', $p['ao_regurg_grade'] ?? null, 'ao_regurg_grade', $storedValue('ao_regurg_grade'));
+    $aoStenosis    = CardInput::listOption('card_valve_grade', $p['ao_stenosis_grade'] ?? null, 'ao_stenosis_grade', $storedValue('ao_stenosis_grade'));
     $aoPeakVel     = CardInput::decimal($p['ao_peak_velocity_m_s'] ?? null, 'ao_peak_velocity_m_s', RANGES['ao_peak_velocity_m_s'][0], RANGES['ao_peak_velocity_m_s'][1]);
     $aoMeanGrad    = CardInput::decimal($p['ao_mean_gradient_mmhg'] ?? null, 'ao_mean_gradient_mmhg', RANGES['ao_mean_gradient_mmhg'][0], RANGES['ao_mean_gradient_mmhg'][1]);
     $aoArea        = CardInput::decimal($p['ao_valve_area_cm2'] ?? null, 'ao_valve_area_cm2', RANGES['ao_valve_area_cm2'][0], RANGES['ao_valve_area_cm2'][1]);
-    $mvRegurg      = CardInput::listOption('card_valve_grade', $p['mv_regurg_grade'] ?? null, 'mv_regurg_grade');
-    $mvStenosis    = CardInput::listOption('card_valve_grade', $p['mv_stenosis_grade'] ?? null, 'mv_stenosis_grade');
+    $mvRegurg      = CardInput::listOption('card_valve_grade', $p['mv_regurg_grade'] ?? null, 'mv_regurg_grade', $storedValue('mv_regurg_grade'));
+    $mvStenosis    = CardInput::listOption('card_valve_grade', $p['mv_stenosis_grade'] ?? null, 'mv_stenosis_grade', $storedValue('mv_stenosis_grade'));
     $mvMeanGrad    = CardInput::decimal($p['mv_mean_gradient_mmhg'] ?? null, 'mv_mean_gradient_mmhg', RANGES['mv_mean_gradient_mmhg'][0], RANGES['mv_mean_gradient_mmhg'][1]);
     $mvArea        = CardInput::decimal($p['mv_valve_area_cm2'] ?? null, 'mv_valve_area_cm2', RANGES['mv_valve_area_cm2'][0], RANGES['mv_valve_area_cm2'][1]);
-    $tvRegurg      = CardInput::listOption('card_valve_grade', $p['tv_regurg_grade'] ?? null, 'tv_regurg_grade');
-    $pvRegurg      = CardInput::listOption('card_valve_grade', $p['pv_regurg_grade'] ?? null, 'pv_regurg_grade');
+    $tvRegurg      = CardInput::listOption('card_valve_grade', $p['tv_regurg_grade'] ?? null, 'tv_regurg_grade', $storedValue('tv_regurg_grade'));
+    $pvRegurg      = CardInput::listOption('card_valve_grade', $p['pv_regurg_grade'] ?? null, 'pv_regurg_grade', $storedValue('pv_regurg_grade'));
     $valveFindings = CardInput::text($p['valve_findings'] ?? null);
 
     // Pericardium
-    $pericardialEff = CardInput::listOption('card_effusion_grade', $p['pericardial_effusion'] ?? null, 'pericardial_effusion');
+    $pericardialEff = CardInput::listOption('card_effusion_grade', $p['pericardial_effusion'] ?? null, 'pericardial_effusion', $storedValue('pericardial_effusion'));
 
     // Report
     $conclusion = CardInput::text($p['conclusion'] ?? null);

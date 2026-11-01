@@ -63,24 +63,29 @@ if ($container === null) {
     die(xlt('The cardiology record is not available or has been deleted.'));
 }
 
-function ecgLoadListV(string $listId): array
+function ecgLoadListV(string $listId, ?string $currentValue = null): array
 {
     $opts = [];
     $res  = sqlStatement(
-        "SELECT option_id, title FROM list_options WHERE list_id = ? AND activity = 1 ORDER BY seq ASC",
+        'SELECT option_id, title, activity
+           FROM list_options
+          WHERE list_id = ?
+          ORDER BY seq ASC',
         [$listId]
     );
     while ($row = sqlFetchArray($res)) {
-        $opts[] = $row;
+        if ((int)$row['activity'] === 1 || (string)$row['option_id'] === (string)$currentValue) {
+            $opts[] = $row;
+        }
     }
     return $opts;
 }
 
-$rhythms         = ecgLoadListV('card_ecg_rhythm');
-$avConductions   = ecgLoadListV('card_ecg_av_conduction');
-$ventConductions = ecgLoadListV('card_ecg_vent_conduction');
-$hypertrophies   = ecgLoadListV('card_ecg_hypertrophy');
-$stTChanges      = ecgLoadListV('card_ecg_st_t');
+$rhythms         = ecgLoadListV('card_ecg_rhythm', (string)($study['rhythm'] ?? ''));
+$avConductions   = ecgLoadListV('card_ecg_av_conduction', (string)($study['av_conduction'] ?? ''));
+$ventConductions = ecgLoadListV('card_ecg_vent_conduction', (string)($study['ventricular_conduction'] ?? ''));
+$hypertrophies   = ecgLoadListV('card_ecg_hypertrophy', (string)($study['hypertrophy'] ?? ''));
+$stTChanges      = ecgLoadListV('card_ecg_st_t', (string)($study['st_t_changes'] ?? ''));
 
 $statusLabel = $readOnly ? xlt('Final') : xlt('Draft');
 $statusClass = $readOnly ? 'bg-success' : 'bg-warning text-dark';

@@ -63,22 +63,27 @@ if ($container === null) {
     die(xlt('The cardiology record is not available or has been deleted.'));
 }
 
-function fitnessLoadListV(string $listId): array
+function fitnessLoadListV(string $listId, ?string $currentValue = null): array
 {
     $opts = [];
     $res  = sqlStatement(
-        "SELECT option_id, title FROM list_options WHERE list_id = ? AND activity = 1 ORDER BY seq ASC",
+        'SELECT option_id, title, activity
+           FROM list_options
+          WHERE list_id = ?
+          ORDER BY seq ASC',
         [$listId]
     );
     while ($row = sqlFetchArray($res)) {
-        $opts[] = $row;
+        if ((int)$row['activity'] === 1 || (string)$row['option_id'] === (string)$currentValue) {
+            $opts[] = $row;
+        }
     }
     return $opts;
 }
 
-$purposes       = fitnessLoadListV('card_fitness_purpose');
-$ecgResults     = fitnessLoadListV('card_fitness_ecg');
-$determinations = fitnessLoadListV('card_fitness_determination');
+$purposes       = fitnessLoadListV('card_fitness_purpose', (string)($study['purpose'] ?? ''));
+$ecgResults     = fitnessLoadListV('card_fitness_ecg', (string)($study['ecg_result'] ?? ''));
+$determinations = fitnessLoadListV('card_fitness_determination', (string)($study['determination'] ?? ''));
 
 $statusLabel = $readOnly ? xlt('Final') : xlt('Draft');
 $statusClass = $readOnly ? 'bg-success' : 'bg-warning text-dark';

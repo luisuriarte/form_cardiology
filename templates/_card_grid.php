@@ -45,6 +45,8 @@ $studies      = isset($studies)      ? $studies            : [];
         $title       = xl((string)$card['title']);
         $icon        = (string)($card['icon'] ?? 'fa-stethoscope');
         $installed   = (bool)$card['installed'];
+        $cardType    = (string)($card['card_type'] ?? 'study');
+        $isTool      = ($cardType === 'tool');
         $count       = (int)($studyCounts[$code] ?? 0);
         $cardStudies = $studies[$code] ?? [];
 
@@ -74,14 +76,23 @@ $studies      = isset($studies)      ? $studies            : [];
                     <i class="fa <?php echo attr($icon); ?> me-2" aria-hidden="true"></i>
                     <strong><?php echo text($title); ?></strong>
                 </span>
-                <?php if ($installed && $containerId > 0) : ?>
+                <?php if ($isTool && $installed) : ?>
+                <a href="<?php echo attr($cardBase . '/index.php'); ?>"
+                   class="btn btn-sm btn-outline-primary cardiology-btn-tool"
+                   data-cardiology-tool-url="<?php echo attr($cardBase . '/index.php'); ?>"
+                   data-cardiology-tool-title="<?php echo attr($title); ?>"
+                   onclick="top.restoreSession()">
+                    <i class="fa fa-arrow-right" aria-hidden="true"></i>
+                    <?php echo xlt('Open'); ?>
+                </a>
+                <?php elseif (!$isTool && $installed && $containerId > 0) : ?>
                 <a href="<?php echo attr($cardBase . '/new.php?' . $qsBase); ?>"
                    onclick="top.restoreSession()"
                    class="btn btn-sm btn-outline-primary cardiology-btn-new">
                     <i class="fa fa-plus" aria-hidden="true"></i>
                     <?php echo xlt('New'); ?>
                 </a>
-                <?php elseif ($installed && $containerId === 0) : ?>
+                <?php elseif (!$isTool && $installed && $containerId === 0) : ?>
                 <button type="submit"
                         class="btn btn-sm btn-outline-primary cardiology-btn-new"
                         form="cardiology-container-form"
@@ -99,6 +110,10 @@ $studies      = isset($studies)      ? $studies            : [];
                 <?php if (!$installed) : ?>
                 <p class="text-muted fst-italic small mb-0">
                     <?php echo xlt('Not installed'); ?>
+                </p>
+                <?php elseif ($isTool) : ?>
+                <p class="text-muted small mb-0">
+                    <?php echo xlt('Manage list catalogs, card activation and preferences.'); ?>
                 </p>
                 <?php elseif ($count === 0) : ?>
                 <p class="text-muted small mb-0">

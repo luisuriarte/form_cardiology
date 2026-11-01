@@ -63,24 +63,29 @@ if ($container === null) {
     die(xlt('The cardiology record is not available or has been deleted.'));
 }
 
-function preopLoadListV(string $listId): array
+function preopLoadListV(string $listId, ?string $currentValue = null): array
 {
     $opts = [];
     $res  = sqlStatement(
-        "SELECT option_id, title FROM list_options WHERE list_id = ? AND activity = 1 ORDER BY seq ASC",
+        'SELECT option_id, title, activity
+           FROM list_options
+          WHERE list_id = ?
+          ORDER BY seq ASC',
         [$listId]
     );
     while ($row = sqlFetchArray($res)) {
-        $opts[] = $row;
+        if ((int)$row['activity'] === 1 || (string)$row['option_id'] === (string)$currentValue) {
+            $opts[] = $row;
+        }
     }
     return $opts;
 }
 
-$surgeryUrgencies     = preopLoadListV('card_surgery_urgency');
-$surgeryRisks         = preopLoadListV('card_surgery_risk');
-$functionalCapacities = preopLoadListV('card_functional_capacity');
-$asaClasses           = preopLoadListV('card_asa_class');
-$recommendations      = preopLoadListV('card_preop_recommendation');
+$surgeryUrgencies     = preopLoadListV('card_surgery_urgency', (string)($study['surgery_urgency'] ?? ''));
+$surgeryRisks         = preopLoadListV('card_surgery_risk', (string)($study['surgery_risk_class'] ?? ''));
+$functionalCapacities = preopLoadListV('card_functional_capacity', (string)($study['functional_capacity'] ?? ''));
+$asaClasses           = preopLoadListV('card_asa_class', (string)($study['asa_class'] ?? ''));
+$recommendations      = preopLoadListV('card_preop_recommendation', (string)($study['recommendation'] ?? ''));
 
 $statusLabel = $readOnly ? xlt('Final') : xlt('Draft');
 $statusClass = $readOnly ? 'bg-success' : 'bg-warning text-dark';

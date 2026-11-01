@@ -66,22 +66,29 @@ $stagesRaw = sqlStatement(
 $stages = [];
 while ($row = sqlFetchArray($stagesRaw)) { $stages[] = $row; }
 
-function stLoadListV(string $listId): array
+function stLoadListV(string $listId, ?string $currentValue = null): array
 {
     $opts = [];
     $res  = sqlStatement(
-        "SELECT option_id, title FROM list_options WHERE list_id = ? AND activity = 1 ORDER BY seq ASC",
+        'SELECT option_id, title, activity
+           FROM list_options
+          WHERE list_id = ?
+          ORDER BY seq ASC',
         [$listId]
     );
-    while ($row = sqlFetchArray($res)) { $opts[] = $row; }
+    while ($row = sqlFetchArray($res)) {
+        if ((int)$row['activity'] === 1 || (string)$row['option_id'] === (string)$currentValue) {
+            $opts[] = $row;
+        }
+    }
     return $opts;
 }
 
-$protocols     = stLoadListV('card_stress_protocol');
-$bpResponses   = stLoadListV('card_bp_response');
-$symptoms      = stLoadListV('card_stress_symptom');
-$stopReasons   = stLoadListV('card_stop_reason');
-$stressResults = stLoadListV('card_stress_result');
+$protocols     = stLoadListV('card_stress_protocol', (string)($study['protocol'] ?? ''));
+$bpResponses   = stLoadListV('card_bp_response', (string)($study['bp_response'] ?? ''));
+$symptoms      = stLoadListV('card_stress_symptom', (string)($study['symptom'] ?? ''));
+$stopReasons   = stLoadListV('card_stop_reason', (string)($study['stop_reason'] ?? ''));
+$stressResults = stLoadListV('card_stress_result', (string)($study['result'] ?? ''));
 
 $statusLabel = $readOnly ? xlt('Final') : xlt('Draft');
 $statusClass = $readOnly ? 'bg-success' : 'bg-warning text-dark';

@@ -19,6 +19,7 @@ declare(strict_types=1);
 require_once('../../../../globals.php');
 require_once($GLOBALS['srcdir'] . '/api.inc.php');
 require_once(__DIR__ . '/../../lib/CardiologyContainer.php');
+require_once(__DIR__ . '/../../lib/CardSettings.php');
 
 use OpenEMR\Common\Acl\AclMain;
 use OpenEMR\Forms\Cardiology\CardiologyContainer;
@@ -97,7 +98,7 @@ function fitListLabel(string $listId, ?string $optionId): string
         return '<span class="text-muted">—</span>';
     }
     $row = sqlQuery(
-        'SELECT title FROM list_options WHERE list_id = ? AND option_id = ? AND activity = 1',
+        'SELECT title FROM list_options WHERE list_id = ? AND option_id = ?',
         [$listId, $optionId]
     );
     return $row ? text(xl_list_label($row['title'])) : text($optionId);
@@ -324,6 +325,13 @@ $declarationText = sprintf(
         </div>
     </div>
 </div>
+
+<?php $pdfFooterText = \OpenEMR\Forms\Cardiology\CardSettings::getClinic('pdf_footer_text'); ?>
+<?php if ($pdfFooterText !== '') : ?>
+<div class="border-top mt-3 pt-2 small text-muted cardiology-pdf-footer">
+    <?php echo nl2br(text($pdfFooterText)); ?>
+</div>
+<?php endif; ?>
 
 </body>
 </html>

@@ -25,8 +25,10 @@ require_once($GLOBALS['srcdir'] . '/forms.inc.php');
 use OpenEMR\Common\Acl\AclMain;
 use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Forms\Cardiology\CardiologyContainer;
+use OpenEMR\Forms\Cardiology\CardRegistry;
 
 require_once(__DIR__ . '/lib/CardiologyContainer.php');
+require_once(__DIR__ . '/lib/CardRegistry.php');
 
 // ---------------------------------------------------------------------------
 // CSRF verification (must be first, before reading any POST data)
@@ -84,6 +86,41 @@ if ($cardiologyId > 0) {
         $notes  !== '' ? $notes  : null,
         (int)$userauthorized
     );
+}
+
+// ---------------------------------------------------------------------------
+// Optional "New" button from a study card tile: open that card directly.
+// Only registered, globally active study cards the user may write are allowed.
+// ---------------------------------------------------------------------------
+$newCardCode = trim((string)($_POST['new_card_code'] ?? ''));
+if ($newCardCode !== '') {
+    if (!preg_match('/^[a-z0-9_]+$/', $newCardCode)) {
+        formJump(CardiologyContainer::getFormRootUrl() . '/view.php?id=' . urlencode((string)$containerId));
+        exit;
+    }
+
+    $newCardModule = sqlQuery(
+        "SELECT code, table_name FROM `card_modules`
+          WHERE code = ? AND card_type = 'study' AND global_active = 1
+          LIMIT 1",
+        [$newCardCode]
+    );
+
+    $userId = (int)($_SESSION['authUserID'] ?? 0);
+    $registry = new CardRegistry();
+    $tableName = (string)($newCardModule['table_name'] ?? '');
+    if (
+        $newCardModule
+        && preg_match('/^form_card_[a-z0-9_]+$/', $tableName)
+        && $registry->canWrite($newCardCode, $userId)
+    ) {
+        $newUrl = CardiologyContainer::getFormRootUrl()
+            . '/cards/' . urlencode($newCardCode) . '/new.php?pid=' . urlencode((string)$pid)
+            . '&encounter=' . urlencode((string)$encounter)
+            . '&cardiology_id=' . urlencode((string)$containerId);
+        formJump($newUrl);
+        exit;
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Read all module codes from card_modules.
     $allCodes = [];
-    $res = sqlStatement('SELECT code FROM `card_modules`', []);
+    $res = sqlStatement("SELECT code FROM `card_modules` WHERE card_type = 'study'", []);
     while ($row = sqlFetchArray($res)) {
         $allCodes[] = $row['code'];
     }
@@ -90,7 +90,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // All card modules.
 $modules = [];
-$res = sqlStatement('SELECT * FROM `card_modules` ORDER BY sort_order ASC', []);
+$res = sqlStatement(
+    "SELECT * FROM `card_modules`
+      WHERE card_type = 'study'
+      ORDER BY sort_order ASC",
+    []
+);
 while ($row = sqlFetchArray($res)) {
     $modules[] = $row;
 }
