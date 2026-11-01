@@ -393,7 +393,29 @@ INSERT IGNORE INTO lang_custom (lang_description, lang_code, constant_name, defi
 ('Spanish (Latin American)', 'el', 'Comments',                              'Comentarios'),
 ('Spanish (Latin American)', 'el', 'DOB',                                   'Fecha de Nac.'),
 ('Spanish (Latin American)', 'el', 'Sex',                                   'Sexo'),
-('Spanish (Latin American)', 'el', 'Status',                                'Estado')
+('Spanish (Latin American)', 'el', 'Status',                                'Estado'),
+
+-- --------------------------------------------------------------------------
+-- Validaciones y errores adicionales (CardInput y save handlers)
+-- --------------------------------------------------------------------------
+('Spanish (Latin American)', 'el', 'Cardiology Error',                       'Error de Cardiología'),
+('Spanish (Latin American)', 'el', 'Validation Error',                       'Error de Validación'),
+('Spanish (Latin American)', 'el', 'A conclusion is required to finalize the study.',
+                                                                            'Se requiere una conclusión para finalizar el estudio.'),
+('Spanish (Latin American)', 'el', 'The container does not match the patient or encounter.',
+                                                                            'El contenedor no coincide con el paciente o la consulta.'),
+('Spanish (Latin American)', 'el', 'Maximum of 100 stage records exceeded.', 'Se superó el límite máximo de 100 registros de etapas.'),
+('Spanish (Latin American)', 'el', 'Invalid phase for stage: ',              'Fase inválida para la etapa: '),
+('Spanish (Latin American)', 'el', 'Invalid number in field %s',             'Número inválido en el campo %s'),
+('Spanish (Latin American)', 'el', 'Value in %s must be greater than or equal to %s',
+                                                                            'El valor en %s debe ser mayor o igual a %s'),
+('Spanish (Latin American)', 'el', 'Value in %s must be less than or equal to %s',
+                                                                            'El valor en %s debe ser menor o igual a %s'),
+('Spanish (Latin American)', 'el', 'Invalid integer in field %s',            'Entero inválido en el campo %s'),
+('Spanish (Latin American)', 'el', 'Date and time required for %s',          'Fecha y hora requeridas para %s'),
+('Spanish (Latin American)', 'el', 'Invalid date format in field %s. Expected Y-m-d H:i[:s]',
+                                                                            'Formato de fecha inválido en el campo %s. Se esperaba Y-m-d H:i[:s]'),
+('Spanish (Latin American)', 'el', 'Invalid option in field %s',             'Opción inválida en el campo %s')
 
 ;
 

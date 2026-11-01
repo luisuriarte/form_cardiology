@@ -114,6 +114,39 @@ class CardRegistry
         return $visible;
     }
 
+    /**
+     * Check if a user is permitted to write/save studies for a specific card.
+     *
+     * Applies the same three visibility rules:
+     *   1. Module exists and global_active = 1.
+     *   2. Effective card_config for $userId is active.
+     *   3. AclMain::aclCheckCore(acl_section, acl_value, '', 'write') passes.
+     *
+     * @param  string $code   Card module code (e.g. 'echo', 'stress_test').
+     * @param  int    $userId OpenEMR users.id.
+     * @return bool
+     */
+    public function canWrite(string $code, int $userId): bool
+    {
+        $mod = sqlQuery(
+            'SELECT code, acl_section, acl_value, global_active FROM `card_modules` WHERE code = ? LIMIT 1',
+            [$code]
+        );
+        if (!$mod || empty($mod['code']) || (int)$mod['global_active'] !== 1) {
+            return false;
+        }
+
+        $configMap = $this->loadConfigMap($userId);
+        if (!$this->isUserActive($code, $userId, $configMap)) {
+            return false;
+        }
+
+        $section = (string)($mod['acl_section'] ?? 'patients');
+        $value   = (string)($mod['acl_value']   ?? 'med');
+
+        return AclMain::aclCheckCore($section, $value, '', 'write');
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------

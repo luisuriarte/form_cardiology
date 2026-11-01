@@ -91,7 +91,7 @@ foreach ($cards as $card) {
 
     // Count active studies
     $countRow = sqlQuery(
-        'SELECT COUNT(*) AS cnt FROM `' . escape_table_name($tableName) . '`
+        'SELECT COUNT(*) AS cnt FROM ' . escape_table_name($tableName) . '
           WHERE cardiology_id = ? AND pid = ? AND encounter = ? AND activity = 1',
         [$containerId, $pid, $encounter]
     );
@@ -100,7 +100,7 @@ foreach ($cards as $card) {
     // Fetch study list (id, study_date, status, user)
     $res = sqlStatement(
         'SELECT id, study_date, status, `user`
-           FROM `' . escape_table_name($tableName) . '`
+           FROM ' . escape_table_name($tableName) . '
           WHERE cardiology_id = ? AND pid = ? AND encounter = ? AND activity = 1
           ORDER BY study_date ASC, id ASC',
         [$containerId, $pid, $encounter]

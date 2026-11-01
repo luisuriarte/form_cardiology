@@ -84,7 +84,7 @@ function cardiology_report(int $pid, int $encounter, int $cols, int $id, bool $p
             // Fetch active studies for this card in this encounter.
             $studyResult = sqlStatement(
                 'SELECT id, study_date, status, `user`
-                   FROM `' . $safeTable . '`
+                   FROM ' . $safeTable . '
                   WHERE cardiology_id = ? AND pid = ? AND encounter = ? AND activity = 1
                   ORDER BY study_date ASC, id ASC',
                 [$id, $pid, $encounter]

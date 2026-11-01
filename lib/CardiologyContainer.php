@@ -107,6 +107,73 @@ class CardiologyContainer
         }
     }
 
+    /**
+     * Start a database transaction using QueryUtils if present, or SQL fallback.
+     */
+    public static function startTransaction(): void
+    {
+        if (class_exists(\OpenEMR\Common\Database\QueryUtils::class)
+            && method_exists(\OpenEMR\Common\Database\QueryUtils::class, 'startTransaction')) {
+            \OpenEMR\Common\Database\QueryUtils::startTransaction();
+        } else {
+            sqlStatement('START TRANSACTION');
+        }
+    }
+
+    /**
+     * Commit a database transaction using QueryUtils if present, or SQL fallback.
+     */
+    public static function commitTransaction(): void
+    {
+        if (class_exists(\OpenEMR\Common\Database\QueryUtils::class)
+            && method_exists(\OpenEMR\Common\Database\QueryUtils::class, 'commitTransaction')) {
+            \OpenEMR\Common\Database\QueryUtils::commitTransaction();
+        } else {
+            sqlStatement('COMMIT');
+        }
+    }
+
+    /**
+     * Rollback a database transaction using QueryUtils if present, or SQL fallback.
+     */
+    public static function rollbackTransaction(): void
+    {
+        if (class_exists(\OpenEMR\Common\Database\QueryUtils::class)
+            && method_exists(\OpenEMR\Common\Database\QueryUtils::class, 'rollbackTransaction')) {
+            \OpenEMR\Common\Database\QueryUtils::rollbackTransaction();
+        } else {
+            sqlStatement('ROLLBACK');
+        }
+    }
+
+    /**
+     * Read the active patient ID from the session (normalized to int).
+     */
+    public static function getSessionPid(): int
+    {
+        if (class_exists(\OpenEMR\Common\Session\PatientSessionUtil::class)) {
+            $p = \OpenEMR\Common\Session\PatientSessionUtil::getPid();
+            if ($p > 0) {
+                return $p;
+            }
+        }
+        return (int)($GLOBALS['pid'] ?? $_SESSION['pid'] ?? 0);
+    }
+
+    /**
+     * Read the active encounter from the session (normalized to int).
+     */
+    public static function getSessionEncounter(): int
+    {
+        if (class_exists(\OpenEMR\Common\Session\EncounterSessionUtil::class)) {
+            $e = \OpenEMR\Common\Session\EncounterSessionUtil::getEncounter();
+            if ($e > 0) {
+                return $e;
+            }
+        }
+        return (int)($GLOBALS['encounter'] ?? $_SESSION['encounter'] ?? 0);
+    }
+
     // -------------------------------------------------------------------------
     // Public API
     // -------------------------------------------------------------------------

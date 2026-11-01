@@ -54,8 +54,9 @@ interface/forms/cardiology/
 ├── config.php                      Admin: enable/disable cards per user
 │
 ├── lib/
-│   ├── CardiologyContainer.php     ensureContainer(), getContainer(), softDelete()
-│   └── CardRegistry.php            getVisibleCards() with ACL + config filtering
+│   ├── CardiologyContainer.php     ensureContainer(), getContainer(), softDelete(), transactions, session helpers
+│   ├── CardRegistry.php            getVisibleCards(), canWrite() with ACL + config filtering
+│   └── CardInput.php               Strict typed validation & sanitization helper (decimal, int, text, dateTime, listOption, flag)
 │
 ├── css/
 │   └── cardiology.css              All styles (no inline styles in PHP)
@@ -70,9 +71,17 @@ interface/forms/cardiology/
 │
 └── cards/
     ├── echo/
-    │   └── README.md               Stub: expected files for the echo card
+    │   ├── README.md               Card specification and schema documentation
+    │   ├── new.php                 New echocardiogram study form
+    │   ├── view.php                View / edit existing echocardiogram study
+    │   ├── save.php                Hardened save handler with transaction & CardInput
+    │   └── print.php               Printable / PDF report view
     └── stress_test/
-        └── README.md               Stub: expected files for the stress test card
+        ├── README.md               Card specification and schema documentation
+        ├── new.php                 New exercise stress test form
+        ├── view.php                View / edit existing stress test & stage grid
+        ├── save.php                Hardened atomic save handler for study and stages
+        └── print.php               Printable / PDF report view with stage charts
 ```
 
 ---
@@ -173,23 +182,54 @@ Every card lives in `cards/<code>/` and must provide:
 
 **Mandatory checks in every card `save.php`:**
 
+1. **CSRF Protection:** Verify token via version-tolerant `CardiologyContainer::verifyCsrfToken()`.
+2. **Card-level Write ACL:** Check user permissions and card activation via `(new CardRegistry())->canWrite($code, $userId)`.
+3. **Container Status & Ownership:** Verify container exists, is active (`activity = 1`), and strictly matches the request's `$pid` and `$encounter`.
+4. **Session Consistency:** Verify `$pid > 0`, `$encounter > 0`, and match session state (`CardiologyContainer::getSessionPid()` and `getSessionEncounter()`).
+5. **Database Transaction:** All operations wrapped in `CardiologyContainer::startTransaction()` / `commitTransaction()` / `rollbackTransaction()`.
+6. **Concurrency & Finalized Lock:** If updating, use `SELECT id, status FROM <table> WHERE id = ? AND pid = ? AND cardiology_id = ? AND activity = 1 FOR UPDATE`. If `status === 'final'`, abort with an error.
+7. **Strict Input Sanitization:** Validate and sanitize every input field through `CardInput` static methods against the card's `RANGES` bounds. Throw `\InvalidArgumentException` identifying the faulty field on error.
+8. **Finalize Gate:** If `$action === 'save_final'`, enforce that `conclusion` is non-empty.
+9. **Single `$data` Array:** Use a single associative array (`column => value`) for INSERT. For UPDATE, strip identity columns (`cardiology_id`, `pid`, `encounter`, `user`, `activity`, `created_at`) and append `WHERE id = ? AND pid = ? AND cardiology_id = ? AND status <> 'final'`.
+10. **Multi-Row Validation (e.g., Stages):** Enforce stage limit (<= 100 rows), whitelist phase (`rest`, `exercise`, `recovery`), scope all stage inserts/updates/deletions strictly by the parent `stress_test_id`.
+
 ```php
 // 1. CSRF
-if (!CsrfUtils::verifyCsrfToken($_POST['csrf_token_form'] ?? '')) {
+if (!CardiologyContainer::verifyCsrfToken()) {
     CsrfUtils::csrfNotVerified();
 }
 
-// 2. ACL
-if (!AclMain::aclCheckCore('patients', 'med', '', 'write')) {
+// 2. ACL and card activation
+$userId = (int)($_SESSION['authUserID'] ?? 0);
+if (!(new CardRegistry())->canWrite('echo', $userId)) {
     die(xlt('Not authorized'));
 }
 
-// 3. Parent container must be active
+// 3. Container ownership and session match
 $container = CardiologyContainer::getContainerById((int)$_POST['cardiology_id']);
-if ($container === null) {
-    die(xlt('The cardiology record is not available or has been deleted.'));
+if ($container === null || (int)$container['pid'] !== $pid || (int)$container['encounter'] !== $encounter) {
+    die(xlt('The container does not match the patient or encounter.'));
+}
+if ($pid <= 0 || $pid !== CardiologyContainer::getSessionPid() || $encounter !== CardiologyContainer::getSessionEncounter()) {
+    die(xlt('Session mismatch. Please reload and try again.'));
 }
 ```
+
+---
+
+## 5.1 Input validation helper (`CardInput`)
+
+Located at `lib/CardInput.php` (namespace `OpenEMR\Forms\Cardiology`, `declare(strict_types=1)`).  
+All methods throw `\InvalidArgumentException` with the field name in the message when validation fails, enabling clear feedback to the clinician.
+
+| Method | Behavior |
+|---|---|
+| `decimal(mixed $v, string $field, ?float $min, ?float $max): ?string` | Trims value; converts decimal commas to dots (`55,5` → `55.5`); validates with `is_numeric()`; enforces min/max plausibility bounds; formats as `number_format($f, 3, '.', '')`. Returns `null` if empty. |
+| `int(mixed $v, string $field, ?int $min, ?int $max): ?int` | Trims value; validates using `filter_var(FILTER_VALIDATE_INT)`; enforces min/max range. Returns `null` if empty. |
+| `text(mixed $v): ?string` | Trims string; returns `null` if empty. |
+| `dateTime(mixed $v, string $field): string` | Validates date/time against `Y-m-d\TH:i`, `Y-m-d H:i:s`, and `Y-m-d H:i` formats; outputs standardized `Y-m-d H:i:s`. Throws if empty or invalid. |
+| `listOption(string $listId, mixed $v, string $field): ?string` | Checks that the option ID exists in OpenEMR's `list_options` for the given `$listId` with `activity = 1`. Returns `null` if empty; throws if invalid. |
+| `flag(mixed $v): int` | Converts checkbox / boolean input to `1` or `0`. |
 
 ---
 
@@ -326,4 +366,50 @@ Run these steps on a test installation before deploying to production.
 - [ ] Log in as a non-admin user.
 - [ ] Navigate directly to `config.php`.
 - [ ] Verify the page displays `"Not authorized"` and stops.
+
+### 9.10 Decimal with comma accepted
+- [ ] In the echo or stress test form, enter a decimal with a comma (e.g. `55,5` in `height_cm` or `lvedd_mm`).
+- [ ] Save the study.
+- [ ] Verify the value is stored and rendered as a numeric decimal (`55.5` or `55.500`).
+
+### 9.11 Non-numeric input rejected
+- [ ] Enter non-numeric text (e.g. `abc` or `12x`) into a numeric field (e.g. `weight_kg`).
+- [ ] Submit the form.
+- [ ] Verify the transaction is rolled back and a clean error page displays `Validation Error` with the offending field name and a functional Back button.
+
+### 9.12 Plausibility bounds rejected
+- [ ] Enter a value exceeding plausibility limits (e.g. `height_cm = 300` or `lvef_pct = 95`).
+- [ ] Submit the form.
+- [ ] Verify the submission is rejected with an explicit out-of-range error message.
+
+### 9.13 Invalid list option rejected
+- [ ] Using browser dev tools or cURL, forge a POST with an invalid option for a list (e.g. `protocol = 'invalid_protocol'`).
+- [ ] Verify the submission throws `\InvalidArgumentException` and displays the validation error page.
+
+### 9.14 Post to finalized study rejected
+- [ ] Finalize a study (`action = 'save_final'`).
+- [ ] Send a POST request targeting the finalized study (`study_id = <finalizedId>`).
+- [ ] Verify the transaction rolls back and the operation is rejected (`This study is finalized and cannot be edited.`).
+
+### 9.15 Container patient / encounter mismatch rejected
+- [ ] Send a forged POST where `cardiology_id` belongs to patient A, but `pid` in POST belongs to patient B.
+- [ ] Verify the request is rejected with `The container does not match the patient or encounter.`.
+
+### 9.16 Direct POST to disabled card rejected
+- [ ] In `config.php`, disable the `echo` card for the test user.
+- [ ] Attempt a direct POST to `cards/echo/save.php` as that user.
+- [ ] Verify the request is rejected with `Not authorized` via `CardRegistry::canWrite()`.
+
+### 9.17 Finalize without conclusion rejected
+- [ ] Leave the **Conclusion** field empty and click **Finalize** (`save_final`).
+- [ ] Verify the submission is stopped and `A conclusion is required to finalize the study.` is displayed.
+
+### 9.18 Duke score protocol dependency
+- [ ] In a stress test study with protocol `Bruce` and duration `600` seconds, verify Duke score is calculated and saved.
+- [ ] Change protocol to `Naughton` or `Ramp` and save.
+- [ ] Verify Duke score is stored as `NULL`.
+
+### 9.19 Stage rows validation
+- [ ] Submit a stage row with an invalid phase (not `rest`, `exercise`, or `recovery`). Verify rejection.
+- [ ] Attempt to submit more than 100 stage rows in a single request. Verify rejection with `Maximum of 100 stage records exceeded.`.
 

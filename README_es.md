@@ -71,8 +71,9 @@ interface/forms/cardiology/
 ├── config.php                      Admin: habilitar/deshabilitar módulos por usuario
 │
 ├── lib/
-│   ├── CardiologyContainer.php     ensureContainer(), getContainer(), softDelete()
-│   └── CardRegistry.php            getVisibleCards() con filtrado por ACL y config
+│   ├── CardiologyContainer.php     ensureContainer(), getContainer(), softDelete(), transacciones, sesiones
+│   ├── CardRegistry.php            getVisibleCards(), canWrite() con filtrado por ACL y config
+│   └── CardInput.php               Helper de validación y sanitización estricta (decimal, int, text, dateTime, listOption, flag)
 │
 ├── css/
 │   └── cardiology.css              Todos los estilos (sin estilos inline en PHP)
@@ -87,17 +88,17 @@ interface/forms/cardiology/
 │
 └── cards/
     ├── echo/
-    │   ├── README.md               Stub: archivos esperados para el módulo echo
+    │   ├── README.md               Documentación del módulo ecocardiograma
     │   ├── new.php                 Nuevo estudio de ecocardiograma
     │   ├── view.php                Ver / editar estudio existente
-    │   ├── save.php                Maneja el POST de new.php / view.php
-    │   └── print.php              Informe imprimible / PDF
+    │   ├── save.php                Guardado robusto con transacciones, CardInput y rangos
+    │   └── print.php               Informe imprimible / PDF
     └── stress_test/
-        ├── README.md               Stub: archivos esperados para el módulo ergometría
+        ├── README.md               Documentación del módulo ergometría
         ├── new.php                 Nuevo estudio de ergometría
-        ├── view.php                Ver / editar estudio existente
-        ├── save.php                Maneja el POST de new.php / view.php
-        └── print.php              Informe imprimible / PDF
+        ├── view.php                Ver / editar estudio existente y etapas
+        ├── save.php                Guardado atómico del estudio y etapas por protocolo
+        └── print.php               Informe imprimible / PDF con gráficos de etapas
 ```
 
 ---
@@ -233,23 +234,54 @@ Cada módulo vive en `cards/<code>/` y debe proveer:
 
 **Verificaciones obligatorias en cada `save.php` de módulo:**
 
+1. **Protección CSRF:** Verificación de token compatible mediante `CardiologyContainer::verifyCsrfToken()`.
+2. **Permisos de escritura por módulo:** Verificación de permisos y estado del módulo con `(new CardRegistry())->canWrite($code, $userId)`.
+3. **Estado y pertenencia del contenedor:** Verificación de que el contenedor existe, está activo (`activity = 1`), y coincide estrictamente con el `$pid` y `$encounter` enviados.
+4. **Coherencia de sesión:** Comprobación de `$pid > 0`, `$encounter > 0` y concordancia con `CardiologyContainer::getSessionPid()` y `getSessionEncounter()`.
+5. **Transacción de base de datos:** Todas las operaciones atómicas envueltas en `CardiologyContainer::startTransaction()` / `commitTransaction()` / `rollbackTransaction()`.
+6. **Bloqueo de concurrencia y validación de estado:** En actualización, consultar con `SELECT id, status FROM <table> WHERE id = ? AND pid = ? AND cardiology_id = ? AND activity = 1 FOR UPDATE`. Si `status === 'final'`, abortar.
+7. **Sanitización estricta de entradas:** Validación mediante métodos estáticos de `CardInput` y rangos de plausibilidad `RANGES`. Ante error, lanzar `\InvalidArgumentException` con el nombre del campo.
+8. **Validación al finalizar:** Si `$action === 'save_final'`, exigir campo `conclusion` no vacío.
+9. **Arreglo único `$data`:** Usar un único array asociativo para INSERT. Para UPDATE, excluir columnas de identidad (`cardiology_id`, `pid`, `encounter`, `user`, `activity`, `created_at`) y añadir cláusula `WHERE id = ? AND pid = ? AND cardiology_id = ? AND status <> 'final'`.
+10. **Validación multirregistro (etapas):** Límite máximo de 100 etapas, fase permitida (`rest`, `exercise`, `recovery`), y ámbito estrictamente restringido al `stress_test_id`.
+
 ```php
 // 1. CSRF
-if (!CsrfUtils::verifyCsrfToken($_POST['csrf_token_form'] ?? '')) {
+if (!CardiologyContainer::verifyCsrfToken()) {
     CsrfUtils::csrfNotVerified();
 }
 
-// 2. ACL
-if (!AclMain::aclCheckCore('patients', 'med', '', 'write')) {
+// 2. ACL y activación del módulo
+$userId = (int)($_SESSION['authUserID'] ?? 0);
+if (!(new CardRegistry())->canWrite('echo', $userId)) {
     die(xlt('Not authorized'));
 }
 
-// 3. El contenedor padre debe estar activo
+// 3. Pertenencia del contenedor y concordancia de sesión
 $container = CardiologyContainer::getContainerById((int)$_POST['cardiology_id']);
-if ($container === null) {
-    die(xlt('The cardiology record is not available or has been deleted.'));
+if ($container === null || (int)$container['pid'] !== $pid || (int)$container['encounter'] !== $encounter) {
+    die(xlt('The container does not match the patient or encounter.'));
+}
+if ($pid <= 0 || $pid !== CardiologyContainer::getSessionPid() || $encounter !== CardiologyContainer::getSessionEncounter()) {
+    die(xlt('Session mismatch. Please reload and try again.'));
 }
 ```
+
+---
+
+## 7.1 Helper de validación de entradas (`CardInput`)
+
+Ubicado en `lib/CardInput.php` (namespace `OpenEMR\Forms\Cardiology`, `declare(strict_types=1)`).  
+Todos los métodos lanzan `\InvalidArgumentException` incluyendo el nombre del campo en el mensaje si la validación falla.
+
+| Método | Comportamiento |
+|---|---|
+| `decimal(mixed $v, string $field, ?float $min, ?float $max): ?string` | Aplica trim; reemplaza comas por puntos (`55,5` → `55.5`); valida con `is_numeric()`; comprueba límites de plausibilidad; retorna `number_format($f, 3, '.', '')`. Retorna `null` si está vacío. |
+| `int(mixed $v, string $field, ?int $min, ?int $max): ?int` | Aplica trim; valida con `filter_var(FILTER_VALIDATE_INT)`; comprueba rango mín/máx. Retorna `null` si está vacío. |
+| `text(mixed $v): ?string` | Aplica trim; retorna `null` si está vacío. |
+| `dateTime(mixed $v, string $field): string` | Valida formatos `Y-m-d\TH:i`, `Y-m-d H:i:s` y `Y-m-d H:i`; retorna `Y-m-d H:i:s`. Lanza excepción si está vacío o no es válido. |
+| `listOption(string $listId, mixed $v, string $field): ?string` | Verifica que la opción exista en `list_options` para esa lista y con `activity = 1`. Retorna `null` si está vacío; lanza excepción si no existe. |
+| `flag(mixed $v): int` | Convierte checkbox / booleano a `1` o `0`. |
 
 ---
 
@@ -410,4 +442,50 @@ Ejecutar estos pasos en una instalación de prueba antes de desplegar en producc
   - Botones Guardar / Cancelar / Nuevo.
   - Badges de estado (Borrador / Final).
 - [ ] Verificar que los títulos de las listas de opciones (grados valvulares, protocolos de ergometría, etc.) aparecen en español en los formularios de estudios.
+
+### 12.11 Aceptación de coma decimal
+- [ ] En un estudio de ecocardiograma o ergometría, ingresar un número decimal con coma (ej. `55,5` en `height_cm` o `lvedd_mm`).
+- [ ] Guardar el estudio.
+- [ ] Verificar que el valor se guarda y procesa como decimal numérico (`55.5` o `55.500`).
+
+### 12.12 Rechazo de entradas no numéricas
+- [ ] Ingresar texto no numérico (ej. `abc` o `12x`) en un campo numérico (ej. `weight_kg`).
+- [ ] Enviar el formulario.
+- [ ] Verificar que la transacción se cancela (rollback) y se muestra una pantalla limpia de `Error de Validación` identificando el campo y con un botón Volver funcional.
+
+### 12.13 Rechazo de valores fuera de los límites de plausibilidad
+- [ ] Ingresar un valor que sobrepase los límites de plausibilidad (ej. `height_cm = 300` o `lvef_pct = 95`).
+- [ ] Enviar el formulario.
+- [ ] Verificar que se rechaza la operación informando el límite permitido.
+
+### 12.14 Rechazo de opción de lista inválida
+- [ ] Mediante herramientas del navegador o cURL, enviar un POST con una opción inexistente para una lista (ej. `protocol = 'protocolo_inventado'`).
+- [ ] Verificar que se lanza `\InvalidArgumentException` y se muestra la pantalla de error de validación.
+
+### 12.15 Rechazo de edición sobre estudio finalizado
+- [ ] Finalizar un estudio (`action = 'save_final'`).
+- [ ] Enviar una petición POST intentando modificar dicho estudio (`study_id = <idFinalizado>`).
+- [ ] Verificar que se bloquea la operación (`Este estudio está finalizado y no puede editarse.`).
+
+### 12.16 Rechazo por discrepancia de paciente / consulta en el contenedor
+- [ ] Enviar un POST donde `cardiology_id` pertenezca al paciente A, pero el `pid` pertenezca al paciente B.
+- [ ] Verificar que se rechaza con `El contenedor no coincide con el paciente o la consulta.`.
+
+### 12.17 Rechazo de POST directo a módulo deshabilitado
+- [ ] En `config.php`, deshabilitar el módulo `echo` para el usuario actual.
+- [ ] Intentar un POST directo a `cards/echo/save.php` con ese usuario.
+- [ ] Verificar que se bloquea la solicitud con `No autorizado` mediante `CardRegistry::canWrite()`.
+
+### 12.18 Rechazo de finalización sin conclusión
+- [ ] Dejar el campo **Conclusión** vacío y presionar **Finalizar** (`save_final`).
+- [ ] Verificar que se detiene el proceso y se muestra el mensaje `Se requiere una conclusión para finalizar el estudio.`.
+
+### 12.19 Dependencia del cálculo de Duke según el protocolo
+- [ ] En una ergometría con protocolo `Bruce` y duración `600` segundos, verificar que el Duke score se calcula y almacena.
+- [ ] Modificar el protocolo a `Naughton` o `Ramp` y guardar.
+- [ ] Verificar que el campo `duke_score` se almacena como `NULL`.
+
+### 12.20 Validación de etapas de ergometría
+- [ ] Enviar una fila de etapa con una fase inválida (distinta de `rest`, `exercise`, o `recovery`). Verificar que se rechaza.
+- [ ] Intentar enviar más de 100 etapas en la misma solicitud. Verificar rechazo con `Se superó el límite máximo de 100 registros de etapas.`.
 

@@ -56,7 +56,11 @@ $symptoms      = stLoadList('card_stress_symptom');
 $stopReasons   = stLoadList('card_stop_reason');
 $stressResults = stLoadList('card_stress_result');
 
-$study    = null;
+$study = [
+    'angina_index'     => '0',
+    'st_depression_mm' => '0',
+    'st_elevation_mm'  => '0',
+];
 $stages   = [];
 $readOnly = false;
 ?>
