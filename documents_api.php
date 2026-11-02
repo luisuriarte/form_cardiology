@@ -1,10 +1,11 @@
 <?php
 
 /**
- * documents_api.php - Document Attachment REST API Endpoint
+ * documents_api.php - Document attachment API endpoint
  *
- * Handles AJAX requests for uploading documents, linking existing patient documents,
- * unlinking attachments from drafts, and listing candidate patient documents.
+ * Handles listing attachments, linking existing patient documents, and
+ * unlinking attachments from draft studies. Uploads are handled exclusively by
+ * documents_upload.php through CardDocuments::storeUploadedFile().
  *
  * Enforces POST method, CSRF tokens, strict parameter validation, and core permissions.
  *
@@ -24,8 +25,6 @@ if (file_exists(__DIR__ . '/../../globals.php')) {
     require_once(__DIR__ . '/../../../globals.php');
 }
 
-use OpenEMR\Common\Acl\AclMain;
-use OpenEMR\Common\Csrf\CsrfUtils;
 use OpenEMR\Forms\Cardiology\CardDocuments;
 use OpenEMR\Forms\Cardiology\CardInput;
 use OpenEMR\Forms\Cardiology\CardiologyContainer;
@@ -36,8 +35,7 @@ require_once __DIR__ . '/lib/CardiologyContainer.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
-// Strictly enforce POST requests
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     http_response_code(405);
     echo json_encode([
         'success' => false,
@@ -46,9 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// CSRF Verification (checks form post and X-CSRF-Token header)
 $csrfToken = $_POST['csrf_token_form'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
-if (!CsrfUtils::verifyCsrfToken($csrfToken)) {
+if (!CardiologyContainer::verifyCsrfToken((string)$csrfToken)) {
     http_response_code(403);
     echo json_encode([
         'success' => false,
@@ -73,67 +70,17 @@ $studyId  = CardInput::int($_POST['study_id'] ?? null, 'study_id', 1);
 
 try {
     switch ($action) {
-        case 'upload':
+        case 'list':
             if ($studyId === null || $cardCode === '') {
                 throw new \InvalidArgumentException(xlt('Missing study identifier or card code.'));
             }
 
-            // Normalize $_FILES to process multiple or single file uploads
-            $filesToProcess = [];
-            if (isset($_FILES['doc_files']) && is_array($_FILES['doc_files']['name'])) {
-                $count = count($_FILES['doc_files']['name']);
-                for ($i = 0; $i < $count; $i++) {
-                    if (empty($_FILES['doc_files']['name'][$i])) {
-                        continue;
-                    }
-                    $filesToProcess[] = [
-                        'name'     => $_FILES['doc_files']['name'][$i],
-                        'type'     => $_FILES['doc_files']['type'][$i] ?? '',
-                        'tmp_name' => $_FILES['doc_files']['tmp_name'][$i] ?? '',
-                        'error'    => (int)($_FILES['doc_files']['error'][$i] ?? UPLOAD_ERR_NO_FILE),
-                        'size'     => (int)($_FILES['doc_files']['size'][$i] ?? 0),
-                    ];
-                }
-            } elseif (isset($_FILES['doc_files'])) {
-                $filesToProcess[] = $_FILES['doc_files'];
-            } elseif (isset($_FILES['doc_file'])) {
-                $filesToProcess[] = $_FILES['doc_file'];
-            }
-
-            if (empty($filesToProcess)) {
-                throw new \InvalidArgumentException(xlt('No file was selected for upload.'));
-            }
-
-            $uploadedCount = 0;
-            $uploadErrors  = [];
-
-            foreach ($filesToProcess as $file) {
-                try {
-                    CardDocuments::attachUploaded($cardCode, $studyId, $sessionPid, $file);
-                    $uploadedCount++;
-                } catch (\Throwable $fe) {
-                    $uploadErrors[] = $fe->getMessage();
-                }
-            }
-
-            if ($uploadedCount === 0 && !empty($uploadErrors)) {
-                throw new \RuntimeException(implode(' ', $uploadErrors));
-            }
-
-            $currentAttachments = CardDocuments::listForStudy($cardCode, $studyId, $sessionPid);
-            $msg = ($uploadedCount === 1)
-                ? xlt('Document attached successfully.')
-                : sprintf(xlt('%d documents attached successfully.'), $uploadedCount);
-
-            if (!empty($uploadErrors)) {
-                $msg .= ' ' . xlt('Some files failed:') . ' ' . implode(' ', $uploadErrors);
-            }
+            $documents = CardDocuments::listForStudy($cardCode, $studyId, $sessionPid);
 
             echo json_encode([
-                'success'     => true,
-                'message'     => $msg,
-                'documents'   => $currentAttachments,
-                'count'       => count($currentAttachments),
+                'success'   => true,
+                'documents' => $documents,
+                'count'     => count($documents),
             ], JSON_UNESCAPED_UNICODE);
             break;
 
@@ -209,7 +156,6 @@ try {
     http_response_code(500);
     echo json_encode([
         'success' => false,
-        'message' => xlt('An unexpected server error occurred: ') . text($e->getMessage()),
+        'message' => xlt('An unexpected server error occurred.'),
     ], JSON_UNESCAPED_UNICODE);
 }
-

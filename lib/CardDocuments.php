@@ -39,6 +39,19 @@ final class CardDocuments
     /** Whitelisted file extensions */
     public const ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'tif', 'tiff'];
 
+    /** Hard ceiling applied by this module even when PHP allows more. */
+    public const MAX_CORE_UPLOAD_BYTES = 52428800; // 50 MB
+
+    /** Maximum number of files accepted in a single upload request. */
+    public const MAX_FILES_PER_REQUEST = 10;
+
+    /** Extensions that must never appear in a non-final filename segment. */
+    private const DANGEROUS_SEGMENTS = [
+        'php', 'php3', 'php4', 'php5', 'php7', 'php8', 'phtml', 'pht', 'phar',
+        'exe', 'com', 'bat', 'cmd', 'sh', 'bash', 'js', 'mjs', 'jsp', 'asp',
+        'aspx', 'cgi', 'pl', 'py', 'rb', 'htaccess', 'html', 'htm', 'svg', 'xml',
+    ];
+
     /** Map of extension to verified MIME types */
     public const ALLOWED_MIME_MAP = [
         'pdf'  => ['application/pdf'],
@@ -148,115 +161,156 @@ final class CardDocuments
     }
 
     /**
-     * Attaches an uploaded file to an existing study.
-     * Stores the physical file and document record using OpenEMR's core Document class,
-     * files it under the Cardiology category, links it in card_documents, and logs an audit record.
+     * Resolves and validates every parameter shared by the upload dialog and API.
      *
-     * Allowed for both draft and final studies.
+     * Enforces the session patient, patients/docs permission, the optional
+     * category ACL, and the optional study/card/patient/write checks.
+     *
+     * @return array{category_id: int, card_code: ?string, study_id: ?int, table_name: ?string, encounter: int}
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     */
+    public static function resolveUploadContext(
+        int $pid,
+        ?int $categoryId = null,
+        ?string $cardCode = null,
+        ?int $studyId = null
+    ): array {
+        $sessionPid = CardiologyContainer::getSessionPid();
+        if ($pid <= 0 || $pid !== $sessionPid) {
+            throw new \InvalidArgumentException(xlt('Invalid patient session. Operation rejected for security.'));
+        }
+
+        if (!AclMain::aclCheckCore('patients', 'docs')) {
+            throw new \RuntimeException(xlt('Not authorized to access patient documents.'));
+        }
+
+        $cardCode = CardInput::text($cardCode) ?? '';
+        $hasCard  = $cardCode !== '';
+        $hasStudy = $studyId !== null && $studyId > 0;
+        if ($hasCard !== $hasStudy) {
+            throw new \InvalidArgumentException(xlt('card_code and study_id must be provided together or not at all.'));
+        }
+
+        $tableName = null;
+        $encounter = 0;
+
+        if ($hasCard) {
+            $userId   = (int)($_SESSION['authUserID'] ?? 0);
+            $registry = new CardRegistry();
+            if (!$registry->canWrite($cardCode, $userId)) {
+                throw new \RuntimeException(xlt('Not authorized to modify this cardiology card.'));
+            }
+
+            $tableName = self::getStudyTableName($cardCode);
+            if ($tableName === null) {
+                throw new \InvalidArgumentException(xlt('Invalid card code.'));
+            }
+
+            $study = sqlQuery(
+                "SELECT id, encounter FROM `{$tableName}` WHERE id = ? AND pid = ? AND activity = 1 LIMIT 1",
+                [$studyId, $pid]
+            );
+            if (!$study || empty($study['id'])) {
+                throw new \InvalidArgumentException(xlt('Study not found or has been deleted.'));
+            }
+            $encounter = (int)($study['encounter'] ?? 0);
+        }
+
+        $resolvedCategory = self::validateCategoryId($categoryId, $hasCard ? $cardCode : null);
+
+        return [
+            'category_id' => $resolvedCategory,
+            'card_code'   => $hasCard ? $cardCode : null,
+            'study_id'    => $hasStudy ? (int)$studyId : null,
+            'table_name'  => $tableName,
+            'encounter'   => $encounter,
+        ];
+    }
+
+    /**
+     * Validates a requested document category, or resolves the card/fallback category.
+     * The category's own aco_spec is checked with core ACL helpers.
      *
      * @throws \InvalidArgumentException
      * @throws \RuntimeException
-     * @return array{success: bool, document_id: int, link_id: int, message: string}
      */
-    public static function attachUploaded(string $cardCode, int $studyId, int $pid, array $file): array
+    public static function validateCategoryId(?int $categoryId = null, ?string $cardCode = null): int
     {
-        self::verifySessionAndPermissions($cardCode, $pid);
-
-        $studyId = CardInput::int($studyId, 'study_id', 1);
-        if ($studyId === null) {
-            throw new \InvalidArgumentException(xlt('Invalid study identifier.'));
-        }
-
-        $tableName = self::getStudyTableName($cardCode);
-        if ($tableName === null) {
-            throw new \InvalidArgumentException(xlt('Invalid card code.'));
-        }
-
-        $study = sqlQuery(
-            "SELECT id, encounter, status, finalized_at FROM `{$tableName}` WHERE id = ? AND pid = ? AND activity = 1 LIMIT 1",
-            [$studyId, $pid]
-        );
-        if (!$study || empty($study['id'])) {
-            throw new \InvalidArgumentException(xlt('Study not found or has been deleted.'));
-        }
-        $encounter = (int)($study['encounter'] ?? 0);
-
-        // Validate upload file structure
-        if (!isset($file['error']) || $file['error'] !== UPLOAD_ERR_OK) {
-            $errCode = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
-            throw new \InvalidArgumentException(self::getUploadErrorMessage($errCode, (string)($file['name'] ?? '')));
-        }
-
-        $filename = trim(basename((string)($file['name'] ?? '')));
-        if ($filename === '') {
-            throw new \InvalidArgumentException(xlt('Uploaded file must have a valid filename.'));
-        }
-
-        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-        if (!in_array($ext, self::ALLOWED_EXTENSIONS, true)) {
-            throw new \InvalidArgumentException(
-                sprintf(xlt('File type not allowed for "%s". Allowed extensions: %s.'), $filename, strtoupper(implode(', ', self::ALLOWED_EXTENSIONS)))
+        if ($categoryId !== null) {
+            if ($categoryId <= 0) {
+                throw new \InvalidArgumentException(xlt('Invalid document category.'));
+            }
+            $category = sqlQuery(
+                'SELECT id, aco_spec FROM `categories` WHERE id = ? LIMIT 1',
+                [$categoryId]
             );
+            if (!$category || (int)$category['id'] !== $categoryId) {
+                throw new \InvalidArgumentException(xlt('Invalid document category.'));
+            }
+            self::assertCategoryAcl((string)($category['aco_spec'] ?? ''));
+            return $categoryId;
         }
 
-        $tmpPath = (string)($file['tmp_name'] ?? '');
-        if ($tmpPath === '' || !is_file($tmpPath)) {
-            throw new \InvalidArgumentException(xlt('Uploaded temporary file not found.'));
-        }
+        $resolved = self::getCategoryId($cardCode ?? '');
+        $category = sqlQuery('SELECT aco_spec FROM `categories` WHERE id = ? LIMIT 1', [$resolved]);
+        self::assertCategoryAcl((string)($category['aco_spec'] ?? ''));
 
-        $fileSize = (int)($file['size'] ?? 0);
-        if ($fileSize <= 0) {
-            $fileSize = (int)filesize($tmpPath);
-        }
-        if ($fileSize <= 0) {
-            throw new \InvalidArgumentException(sprintf(xlt('The file "%s" is empty.'), $filename));
-        }
+        return $resolved;
+    }
 
-        $maxBytes = self::getMaxUploadBytes();
-        if ($fileSize > $maxBytes) {
-            throw new \InvalidArgumentException(
-                sprintf(xlt('The file "%s" (%s) exceeds the maximum upload limit (%s).'), $filename, self::formatBytes($fileSize), self::formatBytes($maxBytes))
-            );
-        }
+    /**
+     * Stores one uploaded file through the core Document API.
+     *
+     * When $cardCode and $studyId are supplied the new document is also linked
+     * to the study through card_documents. Drafts and final studies both accept
+     * attachments. When they are omitted the document is only stored under the
+     * validated category for the patient.
+     *
+     * @param array{name:string,type?:string,tmp_name:string,error:int,size?:int} $file
+     * @return array{success:bool,document_id:int,link_id:int,category_id:int,linked:bool,name:string,message:string}
+     * @throws \InvalidArgumentException
+     * @throws \RuntimeException
+     */
+    public static function storeUploadedFile(
+        int $pid,
+        array $file,
+        ?int $categoryId = null,
+        ?string $cardCode = null,
+        ?int $studyId = null
+    ): array {
+        $context  = self::resolveUploadContext($pid, $categoryId, $cardCode, $studyId);
+        $upload   = self::validateUploadedFile($file);
+        $username = (string)($_SESSION['authUser'] ?? '');
+        $userId   = (int)($_SESSION['authUserID'] ?? 0);
 
-        // Verify content MIME type with mime_content_type (never trust client header)
-        $detectedMime = mime_content_type($tmpPath) ?: '';
-        $allowedMimes = self::ALLOWED_MIME_MAP[$ext] ?? [];
-        if (!in_array($detectedMime, $allowedMimes, true)) {
-            throw new \InvalidArgumentException(
-                sprintf(xlt('File content type "%s" is not permitted or does not match extension for "%s".'), $detectedMime, $filename)
-            );
-        }
-
-        $categoryId = self::getCategoryId($cardCode);
-        $userId     = (int)($_SESSION['authUserID'] ?? 0);
-        $username   = (string)($_SESSION['authUser'] ?? '');
-
-        // Use OpenEMR core Document class to persist the physical file and core DB record
-        require_once $GLOBALS['srcdir'] . '/classes/Document.class.php';
+        require_once self::getDocumentClassPath();
         $doc = new \Document();
-        $fileContent = file_get_contents($tmpPath);
+        $fileContent = file_get_contents($upload['tmp_path']);
         if ($fileContent === false) {
-            throw new \RuntimeException(sprintf(xlt('Unable to read temporary file "%s".'), $filename));
+            throw new \RuntimeException(sprintf(xlt('Unable to read temporary file "%s".'), $upload['name']));
         }
+
+        $studyId   = $context['study_id'];
+        $tableName = $context['table_name'];
 
         $errorMsg = $doc->createDocument(
             $pid,
-            $categoryId,
-            $filename,
-            $detectedMime,
+            $context['category_id'],
+            $upload['name'],
+            $upload['mime'],
             $fileContent,
             '',
             1,
             $userId,
-            $tmpPath,
+            $upload['tmp_path'],
             null,
             $studyId,
             $tableName
         );
 
         if (!empty($errorMsg)) {
-            throw new \RuntimeException(sprintf(xlt('OpenEMR Document storage failed for "%s": %s'), $filename, text($errorMsg)));
+            throw new \RuntimeException(sprintf(xlt('OpenEMR Document storage failed for "%s": %s'), $upload['name'], text((string)$errorMsg)));
         }
 
         $documentId = (int)$doc->get_id();
@@ -264,37 +318,229 @@ final class CardDocuments
             throw new \RuntimeException(xlt('Failed to retrieve newly created document ID.'));
         }
 
-        // Set encounter on the document if known
-        if ($encounter > 0) {
-            sqlStatement('UPDATE `documents` SET `encounter_id` = ? WHERE `id` = ?', [$encounter, $documentId]);
+        if ($context['encounter'] > 0) {
+            sqlStatement('UPDATE `documents` SET `encounter_id` = ? WHERE `id` = ?', [$context['encounter'], $documentId]);
         }
 
-        CardiologyContainer::startTransaction();
-        try {
-            $linkId = self::insertOrReactivateLink($cardCode, $studyId, $pid, $documentId, $categoryId, $username);
-            CardiologyContainer::commitTransaction();
+        $linkId = 0;
+        if ($studyId !== null && $context['card_code'] !== null) {
+            CardiologyContainer::startTransaction();
+            try {
+                $linkId = self::insertOrReactivateLink(
+                    $context['card_code'],
+                    $studyId,
+                    $pid,
+                    $documentId,
+                    $context['category_id'],
+                    $username
+                );
+                CardiologyContainer::commitTransaction();
+            } catch (Throwable $e) {
+                CardiologyContainer::rollbackTransaction();
+                CardAudit::log('doc_upload', $context['card_code'], [
+                    'study_id' => $studyId,
+                    'doc_id'   => $documentId,
+                    'cat_id'   => $context['category_id'],
+                    'filesize' => $upload['size'],
+                ], false);
+                throw $e;
+            }
+        }
 
-            CardAudit::log('doc_attach_upload', $cardCode, [
-                'study_id' => $studyId,
-                'doc_id'   => $documentId,
-                'cat_id'   => $categoryId,
-                'filesize' => $fileSize,
-            ], true);
+        CardAudit::log('doc_upload', $context['card_code'] ?? 'documents', [
+            'study_id' => $studyId ?? 0,
+            'doc_id'   => $documentId,
+            'cat_id'   => $context['category_id'],
+            'filesize' => $upload['size'],
+            'linked'   => $linkId > 0,
+        ], true);
 
-            return [
-                'success'     => true,
-                'document_id' => $documentId,
-                'link_id'     => $linkId,
-                'message'     => xlt('Document attached successfully.'),
-            ];
-        } catch (Throwable $e) {
-            CardiologyContainer::rollbackTransaction();
-            CardAudit::log('doc_attach_upload', $cardCode, [
-                'study_id' => $studyId,
-                'doc_id'   => $documentId,
-                'cat_id'   => $categoryId,
-            ], false);
-            throw $e;
+        return [
+            'success'     => true,
+            'document_id' => $documentId,
+            'link_id'     => $linkId,
+            'category_id' => $context['category_id'],
+            'linked'      => $linkId > 0,
+            'name'        => $upload['name'],
+            'message'     => $linkId > 0
+                ? xlt('Document attached successfully.')
+                : xlt('Document uploaded successfully.'),
+        ];
+    }
+
+    /**
+     * Validates one $_FILES entry, including extension, double-extension masking,
+     * real content type, empty files, and the effective size limit.
+     *
+     * @param array<string,mixed> $file
+     * @return array{name:string,tmp_path:string,extension:string,mime:string,size:int}
+     * @throws \InvalidArgumentException
+     */
+    private static function validateUploadedFile(array $file): array
+    {
+        $errorCode = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+        $rawName   = (string)($file['name'] ?? '');
+        $safeName  = self::sanitizeDisplayName($rawName);
+
+        if ($errorCode !== UPLOAD_ERR_OK) {
+            throw new \InvalidArgumentException(self::getUploadErrorMessage($errorCode, $safeName));
+        }
+
+        $tmpPath = (string)($file['tmp_name'] ?? '');
+        if ($tmpPath === '' || !is_file($tmpPath)) {
+            throw new \InvalidArgumentException(xlt('Uploaded temporary file not found.'));
+        }
+        if (PHP_SAPI !== 'cli' && function_exists('is_uploaded_file') && !is_uploaded_file($tmpPath)) {
+            throw new \InvalidArgumentException(xlt('Uploaded temporary file not found.'));
+        }
+
+        $segments = explode('.', $safeName);
+        if (count($segments) < 2) {
+            throw new \InvalidArgumentException(
+                sprintf(xlt('File type not allowed for "%s". Allowed extensions: %s.'), $safeName, strtoupper(implode(', ', self::ALLOWED_EXTENSIONS)))
+            );
+        }
+
+        $extension = strtolower((string)array_pop($segments));
+        if (!in_array($extension, self::ALLOWED_EXTENSIONS, true)) {
+            throw new \InvalidArgumentException(
+                sprintf(xlt('File type not allowed for "%s". Allowed extensions: %s.'), $safeName, strtoupper(implode(', ', self::ALLOWED_EXTENSIONS)))
+            );
+        }
+
+        foreach ($segments as $segment) {
+            if ($segment === '' || $segment === '.' || $segment === '..') {
+                throw new \InvalidArgumentException(xlt('Uploaded file must have a valid filename.'));
+            }
+            if (in_array(strtolower($segment), self::DANGEROUS_SEGMENTS, true)) {
+                throw new \InvalidArgumentException(
+                    sprintf(xlt('The filename "%s" contains a disallowed double extension.'), $safeName)
+                );
+            }
+        }
+
+        $fileSize = (int)filesize($tmpPath);
+        if ($fileSize <= 0) {
+            throw new \InvalidArgumentException(sprintf(xlt('The file "%s" is empty.'), $safeName));
+        }
+
+        $maxBytes = self::getMaxUploadBytes();
+        if ($fileSize > $maxBytes) {
+            throw new \InvalidArgumentException(
+                sprintf(
+                    xlt('The file "%s" (%s) exceeds the maximum upload limit (%s).'),
+                    $safeName,
+                    self::formatBytes($fileSize),
+                    self::formatBytes($maxBytes)
+                )
+            );
+        }
+
+        $detectedMime = self::detectMimeType($tmpPath);
+        $allowedMimes = self::ALLOWED_MIME_MAP[$extension] ?? [];
+        if ($detectedMime === '' || !in_array($detectedMime, $allowedMimes, true)) {
+            throw new \InvalidArgumentException(
+                sprintf(
+                    xlt('File content type "%s" is not permitted or does not match extension for "%s".'),
+                    $detectedMime !== '' ? $detectedMime : xlt('unknown'),
+                    $safeName
+                )
+            );
+        }
+
+        return [
+            'name'      => $safeName,
+            'tmp_path'  => $tmpPath,
+            'extension' => $extension,
+            'mime'      => $detectedMime,
+            'size'      => $fileSize,
+        ];
+    }
+
+    /**
+     * Sanitizes the original display name without removing the extension.
+     */
+    private static function sanitizeDisplayName(string $name): string
+    {
+        $name = str_replace('\\', '/', $name);
+        $name = basename($name);
+        $name = preg_replace('/[\x00-\x1F\x7F]/u', '', $name) ?? '';
+        $name = preg_replace('/\s+/u', ' ', $name) ?? $name;
+        $name = trim($name);
+
+        if ($name === '' || $name === '.' || $name === '..') {
+            throw new \InvalidArgumentException(xlt('Uploaded file must have a valid filename.'));
+        }
+
+        if (mb_strlen($name, 'UTF-8') > 200) {
+            $extension = pathinfo($name, PATHINFO_EXTENSION);
+            $base = pathinfo($name, PATHINFO_FILENAME);
+            $base = mb_substr($base, 0, 190, 'UTF-8');
+            $name = $base . ($extension !== '' ? '.' . $extension : '');
+        }
+
+        return $name;
+    }
+
+    /**
+     * Detects the real content type, preferring fileinfo over the legacy helper.
+     */
+    private static function detectMimeType(string $path): string
+    {
+        if (class_exists(\finfo::class)) {
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $mime = $finfo->file($path);
+            if (is_string($mime) && $mime !== '') {
+                return $mime;
+            }
+        }
+
+        if (function_exists('mime_content_type')) {
+            $mime = mime_content_type($path);
+            if (is_string($mime)) {
+                return $mime;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Resolves the core Document class path across supported OpenEMR layouts.
+     */
+    private static function getDocumentClassPath(): string
+    {
+        if (!empty($GLOBALS['srcdir'])) {
+            $path = rtrim((string)$GLOBALS['srcdir'], '/\\') . '/classes/Document.class.php';
+            if (is_file($path)) {
+                return $path;
+            }
+        }
+
+        return __DIR__ . '/../../../library/classes/Document.class.php';
+    }
+
+    /**
+     * Applies a category's aco_spec using the core ACL helper.
+     */
+    private static function assertCategoryAcl(string $acoSpec): void
+    {
+        $acoSpec = trim($acoSpec);
+        if ($acoSpec === '') {
+            return;
+        }
+
+        $allowed = false;
+        if (method_exists(AclMain::class, 'aclCheckAcoSpec')) {
+            $allowed = AclMain::aclCheckAcoSpec($acoSpec);
+        }
+        if (!$allowed && str_contains($acoSpec, '|')) {
+            [$section, $value] = explode('|', $acoSpec, 2);
+            $allowed = AclMain::aclCheckCore($section, $value);
+        }
+
+        if (!$allowed) {
+            throw new \RuntimeException(xlt('Not authorized to access this category.'));
         }
     }
 
@@ -525,7 +771,7 @@ final class CardDocuments
     }
 
     /**
-     * Determines maximum upload bytes enforced by PHP environment and core defaults.
+     * Determines maximum upload bytes enforced by PHP and the module's hard ceiling.
      */
     public static function getMaxUploadBytes(): int
     {
@@ -533,10 +779,9 @@ final class CardDocuments
         $postMax   = self::iniToBytes((string)ini_get('post_max_size'));
 
         $limits = array_filter([$uploadMax, $postMax], static fn(int $b): bool => $b > 0);
-        $minLimit = !empty($limits) ? min($limits) : (50 * 1024 * 1024);
+        $minLimit = !empty($limits) ? min($limits) : self::MAX_CORE_UPLOAD_BYTES;
 
-        // Core ceiling of 50 MB
-        return min($minLimit, 50 * 1024 * 1024);
+        return min($minLimit, self::MAX_CORE_UPLOAD_BYTES);
     }
 
     /**

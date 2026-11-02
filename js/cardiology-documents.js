@@ -2,7 +2,8 @@
  * cardiology-documents.js
  *
  * Front-end controller for cardiology study document attachments.
- * Handles file uploading, attaching existing patient documents, and unlinking.
+ * Opens the reusable upload dialog, attaches existing patient documents,
+ * unlinks attachments, and refreshes only the attachment table.
  *
  * Compatible with OpenEMR 8.2.0 - 8.5.0 and Bootstrap 4 / 5.
  */
@@ -10,7 +11,7 @@
 (function () {
     'use strict';
 
-    document.addEventListener('DOMContentLoaded', function () {
+    function init() {
         const container = document.getElementById('cardiology-documents-container');
         if (!container) {
             return;
@@ -23,35 +24,49 @@
         const finalizedAt  = container.getAttribute('data-finalized-at') || '';
         const canWrite     = container.getAttribute('data-can-write') === '1';
         const apiUrl       = container.getAttribute('data-api-url') || '';
+        const uploadUrl    = container.getAttribute('data-upload-url') || '';
         const retrieveBase = container.getAttribute('data-retrieve-base') || '';
         const csrfToken    = container.getAttribute('data-csrf-token') || '';
 
-        const alertBox       = document.getElementById('cardiology-docs-alert');
-        const countBadge     = document.getElementById('cardiology-docs-count-badge');
-        const docsTbody      = document.getElementById('cardiology-docs-tbody');
+        const alertBox   = document.getElementById('cardiology-docs-alert');
+        const countBadge = document.getElementById('cardiology-docs-count-badge');
+        const docsTbody  = document.getElementById('cardiology-docs-tbody');
+        const btnOpenUpload = document.getElementById('cardiology-btn-open-upload');
 
-        // Toggle buttons and panels
-        const btnToggleUpload = document.getElementById('cardiology-btn-toggle-upload');
-        const uploadPanel     = document.getElementById('cardiology-upload-panel');
-        const uploadForm      = document.getElementById('cardiology-upload-form');
-        const fileInput       = document.getElementById('cardiology-file-input');
-        const btnUploadSubmit = document.getElementById('cardiology-upload-submit-btn');
-        const btnUploadCancel = document.getElementById('cardiology-upload-cancel-btn');
-        const uploadProgress  = document.getElementById('cardiology-upload-progress');
+        const i18n = loadI18n();
 
-        const btnOpenPicker   = document.getElementById('cardiology-btn-open-picker');
-        const pickerPanel     = document.getElementById('cardiology-picker-panel');
-        const pickerLoading   = document.getElementById('cardiology-picker-loading');
-        const pickerSelect    = document.getElementById('cardiology-candidate-select');
-        const btnConfirmLink  = document.getElementById('cardiology-btn-confirm-link');
-        const btnPickerCancel = document.getElementById('cardiology-picker-cancel-btn');
+        function loadI18n() {
+            const node = document.getElementById('cardiology-docs-i18n');
+            if (!node) {
+                return {};
+            }
+            try {
+                return JSON.parse(node.textContent);
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function t(key, fallback) {
+            return i18n[key] || fallback || key;
+        }
+
+        function fmt(template, values) {
+            let index = 0;
+            const list = values || [];
+            return String(template || '').replace(/%[ds]/g, function () {
+                const value = list[index++];
+                return value === undefined || value === null ? '' : String(value);
+            });
+        }
 
         function showAlert(message, type) {
-            if (!alertBox) return;
+            if (!alertBox) {
+                return;
+            }
             alertBox.className = 'alert alert-' + type + ' alert-dismissible fade show';
             alertBox.textContent = message;
             alertBox.classList.remove('d-none');
-            // Auto hide after 8 seconds for success
             if (type === 'success') {
                 setTimeout(function () {
                     alertBox.classList.add('d-none');
@@ -73,27 +88,34 @@
 
         function formatBytes(bytes) {
             const b = parseInt(bytes, 10);
-            if (isNaN(b) || b <= 0) return '0 B';
+            if (isNaN(b) || b <= 0) {
+                return '0 B';
+            }
             const units = ['B', 'KB', 'MB', 'GB'];
             const power = Math.min(Math.floor(Math.log(b) / Math.log(1024)), units.length - 1);
             return (b / Math.pow(1024, power)).toFixed(1) + ' ' + units[power];
         }
 
-        function escapeHtml(str) {
-            if (!str) return '';
-            const div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
+        function escapeHtml(value) {
+            return String(value === undefined || value === null ? '' : value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
 
         function renderAttachments(attachments) {
-            if (!docsTbody) return;
+            if (!docsTbody) {
+                return;
+            }
             docsTbody.innerHTML = '';
 
             if (!attachments || attachments.length === 0) {
                 const tr = document.createElement('tr');
                 tr.id = 'cardiology-docs-empty-row';
-                tr.innerHTML = '<td colspan="6" class="text-center text-muted fst-italic py-3">No documents attached to this study.</td>';
+                tr.innerHTML = '<td colspan="6" class="text-center text-muted fst-italic py-3">' +
+                    escapeHtml(t('empty', 'No documents attached to this study.')) + '</td>';
                 docsTbody.appendChild(tr);
                 updateCountBadge(0);
                 return;
@@ -122,14 +144,22 @@
                 tr.setAttribute('data-link-id', linkId);
                 tr.setAttribute('data-doc-id', docId);
 
-                let actionsHtml = '<a href="' + escapeHtml(openUrl) + '" target="_blank" rel="noopener" class="btn btn-xs btn-outline-primary me-1" title="Open document"><i class="fa fa-external-link" aria-hidden="true"></i> Open</a>';
+                let actionsHtml = '<a href="' + escapeHtml(openUrl) + '" target="_blank" rel="noopener" ' +
+                    'class="btn btn-xs btn-outline-primary me-1" title="' + escapeHtml(t('openTitle', 'Open document')) + '">' +
+                    '<i class="fa fa-external-link" aria-hidden="true"></i> ' + escapeHtml(t('open', 'Open')) + '</a>';
+
                 if (!isFinal && canWrite) {
-                    actionsHtml += '<button type="button" class="btn btn-xs btn-outline-danger cardiology-btn-unlink" data-link-id="' + escapeHtml(String(linkId)) + '" title="Unlink this attachment"><i class="fa fa-unlink" aria-hidden="true"></i> Unlink</button>';
+                    actionsHtml += '<button type="button" class="btn btn-xs btn-outline-danger cardiology-btn-unlink" ' +
+                        'data-link-id="' + escapeHtml(String(linkId)) + '" title="' + escapeHtml(t('unlinkTitle', 'Unlink this attachment')) + '">' +
+                        '<i class="fa fa-unlink" aria-hidden="true"></i> ' + escapeHtml(t('unlink', 'Unlink')) + '</button>';
                 }
 
                 let postFinalBadge = '';
                 if (isPostFinal) {
-                    postFinalBadge = ' <span class="badge bg-info text-dark ms-1" title="This document was attached after the study was finalized."><i class="fa fa-clock-o me-1"></i> Added after finalization</span>';
+                    postFinalBadge = ' <span class="badge bg-info text-dark ms-1" title="' +
+                        escapeHtml(t('postFinalTitle', 'This document was attached after the study was finalized.')) + '">' +
+                        '<i class="fa fa-clock-o me-1" aria-hidden="true"></i> ' +
+                        escapeHtml(t('postFinal', 'Added after finalization')) + '</span>';
                 }
 
                 tr.innerHTML =
@@ -144,93 +174,154 @@
             });
         }
 
-        // Toggle Upload Panel
-        if (btnToggleUpload && uploadPanel) {
-            btnToggleUpload.addEventListener('click', function () {
-                hideAlert();
-                uploadPanel.classList.toggle('d-none');
-                if (pickerPanel) pickerPanel.classList.add('d-none');
+        function postApi(params) {
+            const body = new URLSearchParams();
+            body.append('csrf_token_form', csrfToken);
+            Object.keys(params).forEach(function (key) {
+                body.append(key, params[key]);
+            });
+
+            return fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                    'X-CSRF-Token': csrfToken
+                },
+                body: body.toString()
+            }).then(function (response) {
+                return response.json().then(function (data) {
+                    return { ok: response.ok, data: data };
+                });
             });
         }
 
-        if (btnUploadCancel && uploadPanel) {
-            btnUploadCancel.addEventListener('click', function () {
-                uploadPanel.classList.add('d-none');
-                if (fileInput) fileInput.value = '';
+        function refreshAttachments() {
+            return postApi({
+                action: 'list',
+                card_code: cardCode,
+                study_id: studyId
+            }).then(function (result) {
+                if (result.ok && result.data && result.data.success) {
+                    renderAttachments(result.data.documents || []);
+                } else {
+                    const message = (result.data && result.data.message)
+                        ? result.data.message
+                        : fmt(t('networkError', 'Network error: %s'), ['']);
+                    showAlert(message, 'danger');
+                }
+            }).catch(function (error) {
+                showAlert(fmt(t('networkError', 'Network error: %s'), [error.message]), 'danger');
             });
         }
 
-        // Handle File Upload Form Submission
-        if (uploadForm) {
-            uploadForm.addEventListener('submit', function (e) {
-                e.preventDefault();
-                hideAlert();
+        function handleUploadDone(payload) {
+            if (!payload) {
+                return;
+            }
 
-                if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-                    showAlert('Please select at least one file to upload.', 'warning');
+            const documents = payload.documents || [];
+            const errors = payload.errors || [];
+
+            if (documents.length > 0) {
+                refreshAttachments();
+            }
+
+            if (documents.length > 0 && errors.length === 0) {
+                showAlert(fmt(t('uploadSuccess', '%d document(s) uploaded successfully.'), [documents.length]), 'success');
+            } else if (documents.length > 0 && errors.length > 0) {
+                const detail = errors.map(function (item) {
+                    return (item.name ? item.name + ': ' : '') + item.message;
+                }).join(' ');
+                showAlert(fmt(t('uploadPartial', '%d uploaded, %d failed.'), [documents.length, errors.length]) + ' ' + detail, 'warning');
+            } else {
+                const detail = errors.length > 0 ? ' ' + errors.map(function (item) {
+                    return (item.name ? item.name + ': ' : '') + item.message;
+                }).join(' ') : '';
+                showAlert(t('uploadFailed', 'No documents were uploaded.') + detail, 'danger');
+            }
+        }
+
+        if (btnOpenUpload) {
+            btnOpenUpload.addEventListener('click', function () {
+                hideAlert();
+                if (!window.CardUpload || typeof window.CardUpload.open !== 'function') {
+                    showAlert(fmt(t('networkError', 'Network error: %s'), ['CardUpload is not available.']), 'danger');
                     return;
                 }
-
-                const formData = new FormData();
-                formData.append('action', 'upload');
-                formData.append('card_code', cardCode);
-                formData.append('study_id', studyId);
-                formData.append('csrf_token_form', csrfToken);
-
-                for (let i = 0; i < fileInput.files.length; i++) {
-                    formData.append('doc_files[]', fileInput.files[i]);
-                }
-
-                // UI loading state
-                if (btnUploadSubmit) btnUploadSubmit.disabled = true;
-                if (btnUploadCancel) btnUploadCancel.disabled = true;
-                if (uploadProgress) uploadProgress.classList.remove('d-none');
-
-                fetch(apiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRF-Token': csrfToken
-                    },
-                    body: formData
-                })
-                .then(function (res) {
-                    return res.json().then(function (data) {
-                        return { ok: res.ok, status: res.status, data: data };
-                    });
-                })
-                .then(function (resObj) {
-                    if (btnUploadSubmit) btnUploadSubmit.disabled = false;
-                    if (btnUploadCancel) btnUploadCancel.disabled = false;
-                    if (uploadProgress) uploadProgress.classList.add('d-none');
-
-                    if (resObj.ok && resObj.data && resObj.data.success) {
-                        showAlert(resObj.data.message || 'Document uploaded successfully.', 'success');
-                        uploadForm.reset();
-                        uploadPanel.classList.add('d-none');
-                        if (resObj.data.documents) {
-                            renderAttachments(resObj.data.documents);
-                        }
-                    } else {
-                        const errMsg = (resObj.data && resObj.data.message) ? resObj.data.message : 'Upload failed.';
-                        showAlert(errMsg, 'danger');
-                    }
-                })
-                .catch(function (err) {
-                    if (btnUploadSubmit) btnUploadSubmit.disabled = false;
-                    if (btnUploadCancel) btnUploadCancel.disabled = false;
-                    if (uploadProgress) uploadProgress.classList.add('d-none');
-                    showAlert('Network error while uploading: ' + err.message, 'danger');
+                window.CardUpload.open({
+                    pid: pid,
+                    cardCode: cardCode,
+                    studyId: studyId,
+                    multiple: 1,
+                    url: uploadUrl,
+                    onDone: handleUploadDone
                 });
             });
         }
 
         // Toggle Candidate Documents Picker Panel
+        const btnOpenPicker = document.getElementById('cardiology-btn-open-picker');
+        const pickerPanel = document.getElementById('cardiology-picker-panel');
+        const pickerLoading = document.getElementById('cardiology-picker-loading');
+        const pickerSelect = document.getElementById('cardiology-candidate-select');
+        const btnConfirmLink = document.getElementById('cardiology-btn-confirm-link');
+        const btnPickerCancel = document.getElementById('cardiology-picker-cancel-btn');
+
+        function loadCandidates() {
+            if (!pickerSelect) {
+                return;
+            }
+            pickerSelect.innerHTML = '<option value="">' + escapeHtml(t('selectCandidate', '-- Select an existing patient document --')) + '</option>';
+            if (btnConfirmLink) {
+                btnConfirmLink.disabled = true;
+            }
+            if (pickerLoading) {
+                pickerLoading.classList.remove('d-none');
+            }
+
+            postApi({
+                action: 'list_candidates',
+                card_code: cardCode,
+                study_id: studyId
+            }).then(function (result) {
+                if (pickerLoading) {
+                    pickerLoading.classList.add('d-none');
+                }
+                if (result.ok && result.data && result.data.success) {
+                    const list = result.data.candidates || [];
+                    if (list.length === 0) {
+                        pickerSelect.innerHTML = '<option value="">' + escapeHtml(t('noCandidates', 'No unlinked patient documents found.')) + '</option>';
+                        return;
+                    }
+                    pickerSelect.innerHTML = '<option value="">' +
+                        escapeHtml(fmt(t('candidatesAvailable', '-- Select a document (%d available) --'), [list.length])) +
+                        '</option>';
+                    list.forEach(function (candidate) {
+                        const option = document.createElement('option');
+                        option.value = candidate.id;
+                        const categoryLabel = candidate.category_name ? ' [' + candidate.category_name + ']' : '';
+                        const dateLabel = candidate.date ? ' (' + candidate.date + ')' : '';
+                        option.textContent = '#' + candidate.id + ' - ' + (candidate.name || 'Document') + categoryLabel + dateLabel;
+                        pickerSelect.appendChild(option);
+                    });
+                } else {
+                    const message = (result.data && result.data.message)
+                        ? result.data.message
+                        : t('errorLoading', 'Error loading candidate documents.');
+                    showAlert(message, 'danger');
+                }
+            }).catch(function (error) {
+                if (pickerLoading) {
+                    pickerLoading.classList.add('d-none');
+                }
+                showAlert(fmt(t('networkError', 'Network error: %s'), [error.message]), 'danger');
+            });
+        }
+
         if (btnOpenPicker && pickerPanel) {
             btnOpenPicker.addEventListener('click', function () {
                 hideAlert();
                 pickerPanel.classList.toggle('d-none');
-                if (uploadPanel) uploadPanel.classList.add('d-none');
-
                 if (!pickerPanel.classList.contains('d-none')) {
                     loadCandidates();
                 }
@@ -243,64 +334,10 @@
             });
         }
 
-        function loadCandidates() {
-            if (!pickerSelect) return;
-            pickerSelect.innerHTML = '<option value="">-- Select an existing patient document --</option>';
-            if (btnConfirmLink) btnConfirmLink.disabled = true;
-            if (pickerLoading) pickerLoading.classList.remove('d-none');
-
-            const params = new URLSearchParams();
-            params.append('action', 'list_candidates');
-            params.append('card_code', cardCode);
-            params.append('study_id', studyId);
-            params.append('csrf_token_form', csrfToken);
-
-            fetch(apiUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                    'X-CSRF-Token': csrfToken
-                },
-                body: params.toString()
-            })
-            .then(function (res) {
-                return res.json().then(function (data) {
-                    return { ok: res.ok, data: data };
-                });
-            })
-            .then(function (resObj) {
-                if (pickerLoading) pickerLoading.classList.add('d-none');
-                if (resObj.ok && resObj.data && resObj.data.candidates) {
-                    const list = resObj.data.candidates;
-                    if (list.length === 0) {
-                        pickerSelect.innerHTML = '<option value="">No unlinked patient documents found.</option>';
-                        return;
-                    }
-                    pickerSelect.innerHTML = '<option value="">-- Select a document (' + list.length + ' available) --</option>';
-                    list.forEach(function (cand) {
-                        const opt = document.createElement('option');
-                        opt.value = cand.id;
-                        const catLabel = cand.category_name ? ' [' + cand.category_name + ']' : '';
-                        const dateLabel = cand.date ? ' (' + cand.date + ')' : '';
-                        opt.textContent = '#' + cand.id + ' - ' + (cand.name || 'Document') + catLabel + dateLabel;
-                        pickerSelect.appendChild(opt);
-                    });
-                } else {
-                    const err = (resObj.data && resObj.data.message) ? resObj.data.message : 'Error loading candidate documents.';
-                    showAlert(err, 'danger');
-                }
-            })
-            .catch(function (err) {
-                if (pickerLoading) pickerLoading.classList.add('d-none');
-                showAlert('Error loading candidate documents: ' + err.message, 'danger');
-            });
-        }
-
         if (pickerSelect) {
             pickerSelect.addEventListener('change', function () {
-                const val = pickerSelect.value;
                 if (btnConfirmLink) {
-                    btnConfirmLink.disabled = !val || parseInt(val, 10) <= 0;
+                    btnConfirmLink.disabled = !pickerSelect.value || parseInt(pickerSelect.value, 10) <= 0;
                 }
             });
         }
@@ -308,106 +345,98 @@
         // Attach Existing Document
         if (btnConfirmLink) {
             btnConfirmLink.addEventListener('click', function () {
-                const docId = pickerSelect ? pickerSelect.value : '';
-                if (!docId || parseInt(docId, 10) <= 0) return;
+                const documentId = pickerSelect ? pickerSelect.value : '';
+                if (!documentId || parseInt(documentId, 10) <= 0) {
+                    return;
+                }
 
                 hideAlert();
                 btnConfirmLink.disabled = true;
 
-                const params = new URLSearchParams();
-                params.append('action', 'attach_existing');
-                params.append('card_code', cardCode);
-                params.append('study_id', studyId);
-                params.append('document_id', docId);
-                params.append('csrf_token_form', csrfToken);
-
-                fetch(apiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                        'X-CSRF-Token': csrfToken
-                    },
-                    body: params.toString()
-                })
-                .then(function (res) {
-                    return res.json().then(function (data) {
-                        return { ok: res.ok, data: data };
-                    });
-                })
-                .then(function (resObj) {
+                postApi({
+                    action: 'attach_existing',
+                    card_code: cardCode,
+                    study_id: studyId,
+                    document_id: documentId
+                }).then(function (result) {
                     btnConfirmLink.disabled = false;
-                    if (resObj.ok && resObj.data && resObj.data.success) {
-                        showAlert(resObj.data.message || 'Document linked successfully.', 'success');
-                        pickerPanel.classList.add('d-none');
-                        if (resObj.data.documents) {
-                            renderAttachments(resObj.data.documents);
+                    if (result.ok && result.data && result.data.success) {
+                        showAlert(result.data.message || t('linkSuccess', 'Existing document linked successfully.'), 'success');
+                        if (pickerPanel) {
+                            pickerPanel.classList.add('d-none');
+                        }
+                        if (result.data.documents) {
+                            renderAttachments(result.data.documents);
+                        } else {
+                            refreshAttachments();
                         }
                     } else {
-                        const errMsg = (resObj.data && resObj.data.message) ? resObj.data.message : 'Failed to attach existing document.';
-                        showAlert(errMsg, 'danger');
+                        const message = (result.data && result.data.message)
+                            ? result.data.message
+                            : t('linkError', 'Failed to attach existing document.');
+                        showAlert(message, 'danger');
                     }
-                })
-                .catch(function (err) {
+                }).catch(function (error) {
                     btnConfirmLink.disabled = false;
-                    showAlert('Network error while linking document: ' + err.message, 'danger');
+                    showAlert(fmt(t('networkError', 'Network error: %s'), [error.message]), 'danger');
                 });
             });
         }
 
         // Unlink Attachment (delegated click on docsTbody)
         if (docsTbody) {
-            docsTbody.addEventListener('click', function (e) {
-                const btn = e.target.closest('.cardiology-btn-unlink');
-                if (!btn) return;
+            docsTbody.addEventListener('click', function (event) {
+                const button = event.target.closest('.cardiology-btn-unlink');
+                if (!button) {
+                    return;
+                }
 
-                const linkId = btn.getAttribute('data-link-id');
-                if (!linkId) return;
+                const linkId = button.getAttribute('data-link-id');
+                if (!linkId) {
+                    return;
+                }
 
-                if (!confirm('Are you sure you want to unlink this document from the study? The file itself will remain safely in the patient documents.')) {
+                if (!window.confirm(t('unlinkConfirm', 'Are you sure you want to unlink this document from the study? The file itself will remain safely in the patient documents.'))) {
                     return;
                 }
 
                 hideAlert();
-                btn.disabled = true;
+                button.disabled = true;
 
-                const params = new URLSearchParams();
-                params.append('action', 'unlink');
-                params.append('card_code', cardCode);
-                params.append('study_id', studyId);
-                params.append('link_id', linkId);
-                params.append('csrf_token_form', csrfToken);
-
-                fetch(apiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                        'X-CSRF-Token': csrfToken
-                    },
-                    body: params.toString()
-                })
-                .then(function (res) {
-                    return res.json().then(function (data) {
-                        return { ok: res.ok, data: data };
-                    });
-                })
-                .then(function (resObj) {
-                    if (resObj.ok && resObj.data && resObj.data.success) {
-                        showAlert(resObj.data.message || 'Attachment unlinked successfully.', 'success');
-                        if (resObj.data.documents) {
-                            renderAttachments(resObj.data.documents);
+                postApi({
+                    action: 'unlink',
+                    card_code: cardCode,
+                    study_id: studyId,
+                    link_id: linkId
+                }).then(function (result) {
+                    if (result.ok && result.data && result.data.success) {
+                        showAlert(result.data.message || t('unlinkSuccess', 'Attachment unlinked successfully.'), 'success');
+                        if (result.data.documents) {
+                            renderAttachments(result.data.documents);
+                        } else {
+                            refreshAttachments();
                         }
                     } else {
-                        btn.disabled = false;
-                        const errMsg = (resObj.data && resObj.data.message) ? resObj.data.message : 'Failed to unlink document.';
-                        showAlert(errMsg, 'danger');
+                        button.disabled = false;
+                        const message = (result.data && result.data.message)
+                            ? result.data.message
+                            : t('unlinkError', 'Failed to unlink document.');
+                        showAlert(message, 'danger');
                     }
-                })
-                .catch(function (err) {
-                    btn.disabled = false;
-                    showAlert('Network error while unlinking document: ' + err.message, 'danger');
+                }).catch(function (error) {
+                    button.disabled = false;
+                    showAlert(fmt(t('networkError', 'Network error: %s'), [error.message]), 'danger');
                 });
             });
         }
-    });
-})();
 
+        // uploadUrl is supplied by PHP so multi-install webroots keep working.
+        container.setAttribute('data-upload-endpoint', uploadUrl);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();

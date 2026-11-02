@@ -25,6 +25,8 @@
 12. [Limitación del hook de eliminación de OpenEMR](#12-limitación-del-hook-de-eliminación-de-openemr)
 13. [Traducción al español (lang_custom.sql)](#13-traducción-al-español-lang_customsql)
 14. [Lista de verificación de pruebas manuales](#14-lista-de-verificación-de-pruebas-manuales)
+15. [Arquitectura de documentos adjuntos](#15-arquitectura-de-documentos-adjuntos-card_documents)
+16. [Diálogo reutilizable de subida de documentos](#16-diálogo-reutilizable-de-subida-de-documentos)
 
 ---
 
@@ -698,9 +700,11 @@ Ejecutar estos pasos en una instalación de prueba antes de desplegar en producc
 - [ ] En la vista de consulta, cambiar entre tema claro y oscuro de OpenEMR y comprobar que las fuentes y líneas de cuadrícula se adaptan con legibilidad.
 
 ### 14.30 Documentos: Subida de PDF a un estudio en borrador
-- [ ] En `view.php` de un ecocardiograma en borrador, hacer clic en **Subir Archivo** dentro de Documentos Adjuntos.
-- [ ] Seleccionar un informe PDF y presionar **Iniciar Subida**.
-- [ ] Verificar que el archivo aparece de inmediato en la tabla de adjuntos y el contador numérico se incrementa.
+- [ ] En `view.php` de un ecocardiograma en borrador, hacer clic en **Subir Documentos** dentro de Documentos Adjuntos.
+- [ ] Se abre el diálogo reutilizable. Arrastrar un informe PDF a la zona de carga (o hacer clic y elegir el archivo).
+- [ ] Verificar que la cola muestra nombre, tamaño y tipo, y que **Quitar** funciona antes de subir.
+- [ ] Presionar **Subir** y comprobar el progreso por archivo y el resultado exitoso.
+- [ ] Verificar que la tabla de adjuntos y el contador se actualizan sin recargar la página.
 - [ ] En la pestaña general de **Documentos** del paciente en OpenEMR, constatar que el archivo aparece archivado bajo la rama `Cardiología > Ecocardiograma`.
 
 ### 14.31 Documentos: Vincular documento existente del paciente
@@ -739,7 +743,7 @@ Ejecutar estos pasos en una instalación de prueba antes de desplegar en producc
 
 ### 14.38 Documentos: Registro de auditoría
 - [ ] Subir un archivo, vincular un documento existente y desvincular un adjunto.
-- [ ] Revisar el registro de eventos de OpenEMR. Constatar que se asientan eventos para `doc_attach_upload`, `doc_attach_existing` y `doc_unlink` con usuario, código de módulo, ID de estudio, ID de documento e ID de categoría (sin registrar datos clínicos ni nombres de pacientes en el comentario).
+- [ ] Revisar el registro de eventos de OpenEMR. Constatar que se asientan eventos para `doc_upload`, `doc_attach_existing` y `doc_unlink` con usuario, código de módulo, ID de estudio, ID de documento e ID de categoría (sin registrar datos clínicos ni nombres de pacientes en el comentario).
 
 ### 14.39 Documentos: Reporte imprimible en PDF
 - [ ] En un estudio con documentos adjuntos, presionar **Imprimir PDF**.
@@ -754,6 +758,25 @@ Ejecutar estos pasos en una instalación de prueba antes de desplegar en producc
 - [ ] Como superadministrador (`admin/super`), ingresar a `tools/rebuild_category_tree.php`.
 - [ ] Confirmar la ejecución.
 - [ ] Constatar que todas las categorías preexistentes conservan sus identificadores, padres y enlaces a documentos, y la nueva rama de Cardiología queda navegable en el árbol de Documentos.
+
+### 14.42 Documentos: Diálogo de subida reutilizable y matriz de seguridad
+- [ ] **PDF único:** abrir el diálogo desde un estudio en borrador, seleccionar un PDF, subirlo y verificar que la tabla se actualiza y la fila queda vinculada.
+- [ ] **Mezcla permitidos/no permitidos:** encolar un PDF, un JPG y un `.exe`. Verificar que el `.exe` se rechaza en el diálogo y que los permitidos se pueden subir igualmente.
+- [ ] **Arrastrar y soltar:** arrastrar varios archivos permitidos a la zona de carga. Verificar que se encolan, se pueden quitar antes de subir y se suben en forma secuencial.
+- [ ] **Cancelar:** iniciar una subida de varios archivos y presionar **Cancelar subida** (o Escape). Verificar que la solicitud activa se detiene y el diálogo queda abierto con el resumen de cancelación.
+- [ ] **Reintentar:** forzar el fallo de un archivo y luego presionar **Reintentar archivos fallidos** o el ícono de reintento de la fila. Verificar que sólo se reintentan los fallidos y no se duplican los exitosos.
+- [ ] **Tamaño excedido:** intentar un archivo mayor al límite informado por el diálogo. Verificar el rechazo en el cliente y también en el servidor al saltar la validación del navegador.
+- [ ] **Extensión falsificada:** renombrar un ejecutable como `.pdf` y subirlo. Verificar que la comprobación MIME real del servidor lo rechaza.
+- [ ] **PID incorrecto:** enviar un POST con `pid` distinto al de la sesión activa. Verificar HTTP 403 y que no se crea ningún documento.
+- [ ] **Categoría ajena:** enviar un POST con un `category_id` válido cuyo `aco_spec` el usuario no puede acceder. Verificar el rechazo y que no se crea ningún documento.
+- [ ] **Estudio de otro paciente:** enviar un POST con el `study_id` de otro paciente. Verificar el rechazo y que no se crea ningún vínculo.
+- [ ] **Sin `patients/docs`:** iniciar sesión sin `patients/docs`. Verificar que la sección muestra el aviso de permisos, que no aparece el botón de subida y que los POST directos se rechazan.
+- [ ] **Fallo CSRF:** enviar el POST de subida sin token o con token inválido. Verificar HTTP 403 y que no se almacena ningún archivo.
+- [ ] **Estudio finalizado:** subir un documento a un estudio finalizado. Verificar que la subida se permite, el vínculo se crea y la fila muestra **Agregado posterior a la finalización** al refrescar la tabla.
+- [ ] **Refresco de lista:** subir dos archivos y verificar que sólo se refrescan la tabla de adjuntos y el contador (sin recargar la página), mostrando los totales traducidos.
+- [ ] **Diálogo y fallback Bootstrap:** abrir el diálogo con `dlgopen()` y verificar la validación de origen y fuente. Luego quitar temporalmente `dlgopen` y verificar que el modal iframe Bootstrap 4/5 abre, recibe el resultado y se cierra.
+- [ ] **OpenEMR 8.2.0 y 8.5.0:** repetir las pruebas de PDF único, resultado parcial, cancelación y Escape en ambas versiones. Verificar que no se usan comprobaciones por número de versión y que el mismo código funciona.
+- [ ] **Escape y Cerrar:** presionar Escape antes de subir (el diálogo se cierra), durante la subida (la subida se cancela), y usar tanto la X del encabezado como el botón **Cerrar** inferior. Verificar que el opener siempre elimina su listener de `message`.
 
 ---
 
@@ -791,5 +814,220 @@ Categorías sembradas bajo la raíz principal de documentos (ID `1`):
 1. **Respaldo de Base de Datos:** Realizar un respaldo de las tablas `categories`, `categories_seq` y `categories_to_documents`.
 2. **Ejecutar Script SQL:** Correr `sql/upgrade_003_documents.sql` en MariaDB o MySQL.
 3. **Reconstruir Árbol:** Ingresar con rol superadministrador (`admin/super`) a `tools/rebuild_category_tree.php` y ejecutar la reconstrucción para calcular los límites de recorrido preorden (`lft`, `rght`).
+
+---
+
+## 16. Diálogo reutilizable de subida de documentos
+
+La sección de Documentos Adjuntos ya no contiene un formulario de subida
+embebido. Las cinco vistas de estudio incluyen `templates/_documents.php`, que
+abre el diálogo reutilizable de `documents_upload.php` mediante la API pública
+`CardUpload` de JavaScript.
+
+```
+templates/_documents.php  →  js/cardiology-upload.js  →  documents_upload.php
+                                        ↑                        │
+                                        └── resultado postMessage ┘
+```
+
+### 16.1 Archivos
+
+| Archivo | Responsabilidad |
+|---|---|
+| `documents_upload.php` | GET renderiza el diálogo; POST valida y almacena archivos y devuelve el JSON documentado. |
+| `js/cardiology-upload.js` | API pública `CardUpload.open()`, alojamiento con `dlgopen()` o modal Bootstrap, validación de origen/fuente, limpieza del listener, `onDone`/`onClose`/`callBack`. |
+| `js/cardiology-upload-dialog.js` | Arrastrar y soltar, selector de archivos, cola, quitar antes de subir, progreso XHR por archivo, reintento, cancelación, resumen, Escape/Cerrar. |
+| `lib/CardDocuments.php` | `resolveUploadContext()`, `validateCategoryId()` y el único camino de almacenamiento `storeUploadedFile()`. |
+| `documents_api.php` | Sólo acciones que no suben archivos: `list`, `attach_existing`, `unlink`, `list_candidates`. |
+
+### 16.2 Diferencias deliberadas respecto del odontograma
+
+| Comportamiento del odontograma | Diálogo de Cardiología | Motivo |
+|---|---|---|
+| Popup `window.open()` de 1000×600 | Modal `dlgopen()` o modal iframe Bootstrap 4/5 | Conserva el marco nativo de OpenEMR, el apilado, el redimensionado y el tema. |
+| Un único input fijo `odon_doc` | Cola con varios archivos (límite del servidor, máximo 10) | Los adjuntos suelen llegar en varios archivos. |
+| POST de formulario que recarga el opener | `XMLHttpRequest` + JSON + `postMessage` | Evita perder el estado de la página y permite progreso, reintento y resultados parciales. |
+| Sin progreso por archivo | Barra de progreso y estado por archivo | Necesario para PDF grandes y redes clínicas lentas. |
+| Sin reintento | Reintento sólo de archivos fallidos | Nunca se suben dos veces los archivos exitosos. |
+| Sin control de cancelación | Cancelar aborta la solicitud activa | Evita subidas prolongadas si el usuario cambia de opinión. |
+| Árbol de categorías libre en el diálogo | Parámetro `category_id` o categoría del módulo/fallback | La API valida categoría y ACL en el servidor, no en el navegador. |
+| Sin token CSRF | CSRF en cada POST | Obligatorio para solicitudes que cambian estado. |
+| Validación sólo en la página | Lista de extensiones, MIME real, doble extensión, tamaño y validación de paciente/categoría/estudio | El navegador sólo aconseja; el servidor es la autoridad. |
+| `Document::createDocument()` y `UPDATE documents` directos | Un único método `CardDocuments::storeUploadedFile()` | Misma lógica para subidas sueltas, en borrador y en finalizado. |
+| Alerta con recarga de página | `postMessage` validado por origen/fuente y `callBack` opcional | Contrato de integración documentado y reutilizable. |
+
+### 16.3 Contrato HTTP
+
+`GET documents_upload.php`
+
+| Parámetro | Obligatorio | Validación |
+|---|---|---|
+| `pid` | Sí | Debe coincidir con `CardiologyContainer::getSessionPid()`. |
+| `category_id` | No | Debe existir en `categories`; su `aco_spec` se valida con ACL del núcleo. Si se omite, se usa la categoría del módulo o la 22007. |
+| `card_code` | En par | Debe enviarse junto con `study_id`. |
+| `study_id` | En par | Debe pertenecer a `pid`, estar activo y pasar `CardRegistry::canWrite()`. |
+| `multiple` | No | `1` (predeterminado) o `0`. |
+
+`GET` devuelve el HTML del diálogo. `POST` acepta `multipart/form-data`:
+
+| Campo | Obligatorio | Notas |
+|---|---|---|
+| `csrf_token_form` | Sí | También se acepta `X-CSRF-Token`. |
+| `pid` | Sí | Misma validación de sesión que en GET. |
+| `files[]` | Sí | Uno o más archivos, máximo `CardDocuments::MAX_FILES_PER_REQUEST` (10). |
+| `category_id`, `card_code`, `study_id`, `multiple` | No | Misma validación que en GET. |
+
+La respuesta del POST es siempre JSON:
+
+```json
+{
+  "source": "cardiology-upload",
+  "status": "ok",
+  "documents": [
+    {
+      "id": 1234,
+      "name": "informe-ecocardiograma.pdf",
+      "category_id": 22001,
+      "linked": true
+    }
+  ],
+  "errors": []
+}
+```
+
+`status` puede ser:
+
+- `ok` — todos los archivos se almacenaron (y vincularon cuando se enviaron `card_code` + `study_id`).
+- `partial` — al menos un archivo se almacenó y al menos uno falló.
+- `error` — ningún archivo se almacenó; revisar `errors`.
+
+Cada error tiene la forma `{ "name": "archivo.pdf", "message": "mensaje traducido" }`.
+
+Códigos HTTP: `200` para resultados `ok`/`partial`/`error` producidos tras inspeccionar archivos, `400` para parámetros inválidos o ausencia de archivos, `403` para fallos de CSRF, sesión o ACL, `422` para fallos del servicio y `500` para errores inesperados. El diálogo muestra el mensaje de `errors` sin importar el código.
+
+No se acepta del request ningún nombre de función callback, fragmento de JavaScript, nombre de tabla, nombre de columna ni identificador de referencia externa.
+
+### 16.4 Contrato `postMessage`
+
+Tras completar un lote, el diálogo envía exactamente (automáticamente si todos los archivos se subieron correctamente, o cuando el usuario cierra el diálogo tras un resultado parcial o con errores):
+
+```js
+window.parent.postMessage({
+  source: 'cardiology-upload',
+  status: 'ok' | 'partial' | 'error',
+  documents: [{ id, name, category_id, linked }],
+  errors: [{ name, message }]
+}, window.location.origin);
+```
+
+El receptor debe validar `event.origin` (igual a `window.location.origin`) y
+`event.source` (la ventana del iframe del diálogo). `CardUpload.open()` lo hace
+y además soporta un callback del lado del opener:
+
+```js
+function alCambiar(payload) {
+  if (!payload || !payload.documents) return;
+  console.log(payload.documents.length, payload.errors.length);
+}
+
+CardUpload.open({
+  pid: 42,
+  cardCode: 'echo',
+  studyId: 7,
+  multiple: 1,
+  callBack: 'alCambiar',
+  onDone: alCambiar,
+  onClose: function () { /* se ejecuta al quitar el diálogo */ }
+});
+```
+
+Si `postMessage` no está disponible, el diálogo mantiene visible el resumen
+final y ofrece un botón **Cerrar** en lugar de fallar en silencio.
+
+### 16.5 Asset de Header y ejemplo de integración
+
+`dlgopen()` proviene del asset `dialog` de OpenEMR. Al integrar el cargador en
+otro script, incluirlo junto con jQuery y Bootstrap:
+
+```php
+<?php
+use OpenEMR\Core\Header;
+
+require_once __DIR__ . '/lib/CardiologyContainer.php';
+
+$uploadUrl = \OpenEMR\Forms\Cardiology\CardiologyContainer::getFormRootUrl() . '/documents_upload.php';
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <?php Header::setupHeader(['dialog', 'jquery', 'bootstrap']); ?>
+</head>
+<body>
+    <button type="button" id="abrir-subida" data-pid="<?php echo attr((string)$pid); ?>">
+        <?php echo xlt('Upload documents'); ?>
+    </button>
+
+    <script src="<?php echo attr($GLOBALS['webroot']); ?>/interface/forms/form_cardiology/js/cardiology-upload.js"></script>
+    <script>
+    document.getElementById('abrir-subida').addEventListener('click', function () {
+        window.CardUpload.open({
+            pid: this.getAttribute('data-pid'),
+            categoryId: 22001,
+            cardCode: 'echo',
+            studyId: <?php echo (int)$studyId; ?>,
+            url: <?php echo json_encode($uploadUrl); ?>,
+            multiple: 1,
+            onDone: function (payload) {
+                if (!payload || !payload.documents) return;
+                console.log('Almacenados:', payload.documents.length);
+                console.log('Fallidos:', payload.errors.length);
+            }
+        });
+    });
+    </script>
+</body>
+</html>
+```
+
+El diálogo obtiene sus límites de `documents_upload.php`; no codificar a mano el
+tamaño máximo ni la cantidad de archivos en la página que lo integra. Los tipos
+permitidos, el tamaño máximo y la cantidad máxima por solicitud se generan en el
+servidor.
+
+### 16.6 Notas de seguridad del servidor
+
+- Cada POST verifica CSRF mediante `CardiologyContainer::verifyCsrfToken()`.
+- `pid` debe coincidir con la sesión activa del paciente; no se pueden vincular estudios de otros pacientes.
+- Se exige `patients/docs`; las subidas vinculadas además exigen `CardRegistry::canWrite()` para el módulo.
+- Un `category_id` enviado debe existir y su `aco_spec` debe pasar la ACL del núcleo.
+- Sólo se aceptan `pdf`, `jpg`, `jpeg`, `png`, `tif` y `tiff`.
+- Primero se valida la extensión y luego se detecta el tipo de contenido real con fileinfo. Se rechazan las dobles extensiones que ocultan ejecutables.
+- El límite efectivo es el menor entre el techo del módulo (50 MB), `upload_max_filesize` y `post_max_size`; la solicitud se limita a 10 archivos. El diálogo muestra el límite efectivo informado por el servidor.
+- Los nombres visibles se sanitizan (componentes de ruta, caracteres de control y longitud excesiva) antes de llegar a `Document::createDocument()`.
+- Los documentos se crean únicamente mediante la clase `Document` del núcleo bajo la categoría validada. Todo el SQL usa sentencias preparadas y ningún nombre de tabla o columna proviene del request.
+- Cada archivo almacenado o vinculado se audita (`doc_upload`) con módulo, estudio, documento, categoría y tamaño, nunca con contenido clínico.
+- La respuesta se codifica en JSON y toda la salida del diálogo se escapa.
+
+### 16.7 Compatibilidad con OpenEMR 8.2.0 – 8.5.0
+
+Se usa detección de características; no hay comprobaciones por número de versión.
+
+- **`dlgopen`** existe en 8.2.0 y 8.5.0. 8.5.0 quita `resolvePromiseOn` de sus valores predeterminados, por lo que este módulo nunca lo pasa ni depende de él. Si `dlgopen` no existe, se usa el modal iframe Bootstrap.
+- **`Header::setupHeader()`** acepta claves de assets en ambas versiones. `dialog`, `jquery`, `bootstrap` y `utility` se cargan automáticamente en los layouts que usa este formulario. Al integrar en otro script, pedir `dialog` explícitamente.
+- **Bootstrap / jQuery:** 8.2.0 y 8.5.0 incluyen Bootstrap 4.6.2 y jQuery 3.7.1; el marcado también tolera clases de Bootstrap 5.
+- **`Document::createDocument()`** tiene la misma firma en ambas versiones, incluidos `foreign_reference_id` y `foreign_reference_table`, y `get_id()` existe en ambas.
+- **`CsrfUtils`** requiere un argumento de sesión en ambas versiones. El módulo centraliza las llamadas en `CardiologyContainer`, que refleja la firma del método para aceptar ambos órdenes de argumentos.
+- **`AclMain`** expone los mismos métodos ACL; 8.5.0 agrega principalmente tipos de retorno.
+- **Accesores de sesión** se resuelven con `CardiologyContainer::getSessionPid()`, que usa las utilidades del núcleo cuando existen y cae a `$_SESSION` / `$GLOBALS`.
+- **URL de recuperación de documentos** se mantiene igual en ambas versiones: `<webroot>/controller.php?document&retrieve&patient_id=…&as_file=false&document_id=…`.
+
+### 16.8 Precaución sobre reutilización entre repositorios
+
+El diálogo es reutilizable dentro de este módulo, pero no es una biblioteca
+estable para compartir a largo plazo entre repositorios no relacionados. Su
+formdir, IDs de categoría, expectativas de ACL, URL raíz y esquema
+`card_documents` pertenecen a `form_cardiology`. Si otro módulo necesita la misma
+experiencia, conviene copiar el contrato y adaptar las rutas y la resolución de
+categorías allí, en lugar de apuntar dos repositorios a un archivo que cambia.
 
 

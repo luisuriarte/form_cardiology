@@ -238,10 +238,72 @@
     vertical-align: middle;
 }
 
-#cardiology-upload-panel,
 #cardiology-picker-panel {
     background-color: #f8fafc;
     border: 1px dashed #cbd5e1;
+}
+
+/* -------------------------------------------------------------------------
+ * Upload dialog
+ * ------------------------------------------------------------------------- */
+.cardiology-upload-dialog {
+    background-color: var(--card-bg, #ffffff);
+    color: var(--body-color, #212529);
+}
+
+.cardiology-upload-dropzone {
+    border: 2px dashed #adb5bd;
+    border-radius: 0.5rem;
+    background-color: var(--light, #f8f9fa);
+    padding: 1.5rem 1rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s ease-in-out, background-color 0.15s ease-in-out;
+}
+
+.cardiology-upload-dropzone:hover,
+.cardiology-upload-dropzone:focus {
+    border-color: var(--primary, #007bff);
+    background-color: rgba(0, 123, 255, 0.05);
+    outline: none;
+}
+
+.cardiology-upload-dropzone.dragover {
+    border-color: var(--primary, #007bff);
+    background-color: rgba(0, 123, 255, 0.1);
+}
+
+.cardiology-upload-queue {
+    max-height: 40vh;
+    overflow-y: auto;
+    outline: none;
+}
+
+.cardiology-upload-item {
+    background-color: var(--card-bg, #ffffff);
+}
+
+.cardiology-upload-item .progress {
+    background-color: #e9ecef;
+}
+
+.cardiology-upload-item .text-truncate {
+    max-width: 100%;
+}
+
+@media (max-width: 575.98px) {
+    .cardiology-upload-dialog .container-fluid {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+
+    .cardiology-upload-dropzone {
+        padding: 1rem 0.5rem;
+    }
+
+    .cardiology-upload-item {
+        font-size: 0.875rem;
+    }
 }
 
 .btn-xs {

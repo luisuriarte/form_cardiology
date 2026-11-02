@@ -23,6 +23,8 @@
 10. [Soft-delete policy](#10-soft-delete-policy)
 11. [OpenEMR delete hook limitation](#11-openemr-delete-hook-limitation)
 12. [Manual test checklist](#12-manual-test-checklist)
+13. [Document attachments architecture](#13-document-attachments-architecture-card_documents)
+14. [Reusable document upload dialog](#14-reusable-document-upload-dialog)
 
 ---
 
@@ -636,9 +638,11 @@ Run these steps on a test installation before deploying to production.
 - [ ] In the main view, toggle dark/light theme in OpenEMR and verify text and grid colors adapt cleanly.
 
 ### 12.29 Documents: Upload PDF to draft study
-- [ ] In a draft echo study `view.php`, click **Upload File** in the Attached Documents section.
-- [ ] Select a PDF report and click **Start Upload**.
-- [ ] Verify the document appears immediately in the attachments table and the count badge increments.
+- [ ] In a draft echo study `view.php`, click **Upload documents** in the Attached Documents section.
+- [ ] The reusable upload dialog opens. Drag a PDF report onto the drop zone (or click it and choose the file).
+- [ ] Verify the queue shows the file name, size, and type, and that **Remove** works before upload.
+- [ ] Click **Upload** and verify per-file progress, then success.
+- [ ] Verify the attachments table and count badge refresh without reloading the page.
 - [ ] Open the patient's main OpenEMR **Documents** tab and verify the file appears under `Cardiology > Echocardiogram`.
 
 ### 12.30 Documents: Attach existing patient document
@@ -676,8 +680,8 @@ Run these steps on a test installation before deploying to production.
 - [ ] If both card category and fallback 22007 are missing from `categories`, verify an actionable error is shown instructing the administrator to run the upgrade script and rebuild the category tree.
 
 ### 12.37 Documents: Audit logging
-- [ ] Attach an uploaded file, link an existing document, and unlink an attachment.
-- [ ] Check OpenEMR's `log` table / Event Log. Verify audit records for `doc_attach_upload`, `doc_attach_existing`, and `doc_unlink` containing user, card code, study ID, document ID, and category ID (with zero patient clinical data in comments).
+- [ ] Upload a document, link an existing document, and unlink an attachment.
+- [ ] Check OpenEMR's `log` table / Event Log. Verify audit records for `doc_upload`, `doc_attach_existing`, and `doc_unlink` containing user, card code, study ID, document ID, and category ID (with zero patient clinical data in comments).
 
 ### 12.38 Documents: Print PDF attachments list
 - [ ] Add attachments to a study and click **Print PDF**.
@@ -692,6 +696,25 @@ Run these steps on a test installation before deploying to production.
 - [ ] As super administrator, navigate to `tools/rebuild_category_tree.php`.
 - [ ] Confirm and execute the tree rebuild.
 - [ ] Verify that all existing OpenEMR categories retain their original IDs, parents, and document links, and the new Cardiology branch is fully browsable in the Documents tree.
+
+### 12.41 Documents: Reusable upload dialog and security matrix
+- [ ] **Single PDF:** open the dialog from a draft study, select one PDF, upload it, and verify the table refreshes and the new row is linked.
+- [ ] **Mixed allowed/disallowed:** queue one PDF, one JPG, and one `.exe`. Verify the `.exe` is rejected in the dialog and the allowed files can still be uploaded.
+- [ ] **Drag and drop:** drag several allowed files onto the drop zone. Verify they are queued, removable before upload, and uploaded sequentially.
+- [ ] **Cancel:** start a multi-file upload and click **Cancel upload** (or press Escape). Verify the active request stops and the dialog stays open with a cancelled summary.
+- [ ] **Retry:** force one file to fail (for example, make the upload endpoint return an error for that file), then click **Retry failed files** or the per-file retry icon. Verify only failed files are retried and successful files are not duplicated.
+- [ ] **Oversize:** attempt a file larger than the limit reported by the dialog. Verify the client rejects it and the server also rejects it when the check is bypassed.
+- [ ] **Spoofed extension:** rename an executable to `.pdf` and upload it. Verify the server's real MIME check rejects the file.
+- [ ] **Wrong pid:** craft a POST with `pid` different from the active patient session. Verify HTTP 403 and no document is created.
+- [ ] **Foreign category:** craft a POST with a valid `category_id` whose `aco_spec` the user cannot access. Verify rejection and no document is created.
+- [ ] **Other patient's study:** craft a POST with another patient's `study_id`. Verify rejection and no link is created.
+- [ ] **Missing `patients/docs`:** log in without `patients/docs`. Verify the Documents section shows the permission alert, the upload button is absent, and direct POSTs are rejected.
+- [ ] **CSRF failure:** submit the upload POST with a missing or invalid `csrf_token_form`. Verify HTTP 403 and no file is stored.
+- [ ] **Final study attachment:** upload a document to a finalized study. Verify the attachment succeeds, is linked, and shows **Added after finalization** after the table refresh.
+- [ ] **List refresh:** upload two files, then verify only the attachment table and count badge refresh (the page does not reload) and the translated counts are shown.
+- [ ] **Dialog and Bootstrap fallback:** open the dialog via `dlgopen()` and verify origin/source validation. Temporarily undefine `dlgopen` and verify the Bootstrap 4/5 iframe modal fallback opens, receives the result, and closes.
+- [ ] **OpenEMR 8.2.0 and 8.5.0:** repeat the single-PDF, partial-result, cancel, and Escape checks on both versions. Verify no version-number checks are used and the same code path runs.
+- [ ] **Escape and Close:** press Escape before uploading (dialog closes), during upload (upload is cancelled), and click both the header X and the bottom **Close** button. Verify the opener always removes its `message` listener.
 
 ---
 
@@ -729,5 +752,257 @@ Categories seeded under the OpenEMR root document category (ID `1`):
 1. **Database Backup:** Back up `categories`, `categories_seq`, and `categories_to_documents`.
 2. **Run Upgrade SQL:** Execute `sql/upgrade_003_documents.sql` in MariaDB/MySQL.
 3. **Rebuild Category Tree:** Log in as a super administrator (`admin/super`) and open `tools/rebuild_category_tree.php`. Click **Rebuild Document Categories Tree** to recompute the nested-set preorder boundaries (`lft`, `rght`) across all categories.
+
+---
+
+## 14. Reusable document upload dialog
+
+The Attached Documents section no longer contains an inline upload form. All
+five study views include `templates/_documents.php`, which opens the reusable
+dialog implemented by `documents_upload.php` through the public `CardUpload`
+JavaScript API.
+
+```
+templates/_documents.php  →  js/cardiology-upload.js  →  documents_upload.php
+                                        ↑                        │
+                                        └── postMessage result ──┘
+```
+
+### 14.1 Files
+
+| File | Responsibility |
+|---|---|
+| `documents_upload.php` | GET renders the dialog; POST validates and stores files, returning the documented JSON result. |
+| `js/cardiology-upload.js` | Public `CardUpload.open()` API, `dlgopen()`/Bootstrap modal hosting, origin/source checks, listener cleanup, `onDone`/`onClose`/`callBack`. |
+| `js/cardiology-upload-dialog.js` | Drag/drop, file picker, queue, remove-before-upload, per-file XHR progress, retry, cancel, summary, Escape/Close. |
+| `lib/CardDocuments.php` | `resolveUploadContext()`, `validateCategoryId()`, and the single `storeUploadedFile()` path. |
+| `documents_api.php` | Non-upload actions only: `list`, `attach_existing`, `unlink`, `list_candidates`. |
+
+### 14.2 Deliberate differences from the odontogram uploader
+
+The odontogram was used as the UX reference. The following differences are
+intentional and required by this contract:
+
+| Odontogram behavior | Cardiology upload dialog | Why |
+|---|---|---|
+| `window.open()` popup sized 1000×600 | `dlgopen()` modal, or a Bootstrap 4/5 iframe modal fallback | Keeps OpenEMR's native dialog chrome, stacking, resize, and theme. |
+| Single fixed `odon_doc` input | Queue with multiple files (server limit, maximum 10) | Attachments commonly arrive as several files. |
+| Normal form POST that reloads the opener | `XMLHttpRequest` + JSON + `postMessage` | Avoids losing page state and allows progress, retry, and partial results. |
+| No per-file progress | Per-file upload progress bar and status | Required for large PDFs and slow clinical networks. |
+| No retry | Retry failed files only | Successful files are never uploaded twice. |
+| No cancel control | Cancel aborts the active request | Prevents long-running uploads when the user changes their mind. |
+| Free category tree in the dialog | `category_id` parameter or the card/fallback category | The API owns category validation and ACL, not the browser. |
+| No CSRF token | CSRF checked on every POST | Mandatory for state-changing requests. |
+| Validation only in the page | Extension allowlist, real MIME check, double-extension check, size limit, patient/category/study checks | Browser checks are advisory; the server is authoritative. |
+| Direct `Document::createDocument()` plus `UPDATE documents` | One `CardDocuments::storeUploadedFile()` method | Same logic for standalone, draft, and final uploads. |
+| Page reload alert | Origin/source-checked `postMessage`, optional opener `callBack` | Documented, reusable integration contract. |
+
+### 14.3 HTTP contract
+
+`GET documents_upload.php`
+
+| Parameter | Required | Validation |
+|---|---|---|
+| `pid` | Yes | Must equal `CardiologyContainer::getSessionPid()`. |
+| `category_id` | No | Must exist in `categories`; the category `aco_spec` is checked with core ACL. When omitted, the card category or fallback `22007` is used. |
+| `card_code` | Pair | Must be supplied together with `study_id`. |
+| `study_id` | Pair | Must belong to `pid`, be active, and pass `CardRegistry::canWrite()`. |
+| `multiple` | No | `1` (default) or `0`. |
+
+`GET` returns the HTML dialog page. `POST` accepts `multipart/form-data`:
+
+| Field | Required | Notes |
+|---|---|---|
+| `csrf_token_form` | Yes | Also accepted as `X-CSRF-Token`. |
+| `pid` | Yes | Same session check as GET. |
+| `files[]` | Yes | One or more files, maximum `CardDocuments::MAX_FILES_PER_REQUEST` (10). |
+| `category_id`, `card_code`, `study_id`, `multiple` | No | Same validation as GET. |
+
+The POST response is always JSON:
+
+```json
+{
+  "source": "cardiology-upload",
+  "status": "ok",
+  "documents": [
+    {
+      "id": 1234,
+      "name": "echocardiogram-report.pdf",
+      "category_id": 22001,
+      "linked": true
+    }
+  ],
+  "errors": []
+}
+```
+
+`status` is one of:
+
+- `ok` — every file was stored (and linked when `card_code` + `study_id` were supplied).
+- `partial` — at least one file was stored and at least one failed.
+- `error` — no file was stored; inspect `errors`.
+
+Each error is `{ "name": "file.pdf", "message": "translated message" }`.
+
+HTTP status codes: `200` for `ok`/`partial`/`error` results produced after a
+file was inspected, `400` for invalid parameters or no files, `403` for CSRF,
+session, or ACL failures, `422` for service-level failures, `500` for unexpected
+server errors. The dialog displays the message in `errors` regardless of code.
+
+No callback function name, JavaScript snippet, table name, column name, or
+foreign-reference identifier is accepted from the request.
+
+### 14.4 `postMessage` contract
+
+After a completed batch the dialog sends exactly (automatically on full success,
+or when the user closes the dialog after a partial/error result):
+
+```js
+window.parent.postMessage({
+  source: 'cardiology-upload',
+  status: 'ok' | 'partial' | 'error',
+  documents: [{ id, name, category_id, linked }],
+  errors: [{ name, message }]
+}, window.location.origin);
+```
+
+The receiver must check both `event.origin` (exact `window.location.origin`) and
+`event.source` (the dialog iframe content window). `CardUpload.open()` does this
+and also supports an opener-side callback:
+
+```js
+function onChange(payload) {
+  if (!payload || !payload.documents) return;
+  console.log(payload.documents.length, payload.errors.length);
+}
+
+CardUpload.open({
+  pid: 42,
+  cardCode: 'echo',
+  studyId: 7,
+  multiple: 1,
+  callBack: 'onChange',
+  onDone: onChange,
+  onClose: function () { /* runs after the dialog is removed */ }
+});
+```
+
+If `postMessage` is unavailable, the dialog keeps its final summary visible and
+offers a **Close** button instead of silently failing.
+
+### 14.5 Required Header asset and embedding example
+
+`dlgopen()` comes from OpenEMR's `dialog` asset. Include it (and jQuery and
+Bootstrap) when embedding the uploader in another script:
+
+```php
+<?php
+use OpenEMR\Core\Header;
+
+require_once __DIR__ . '/lib/CardiologyContainer.php';
+
+$uploadUrl = \OpenEMR\Forms\Cardiology\CardiologyContainer::getFormRootUrl() . '/documents_upload.php';
+$csrfToken = \OpenEMR\Forms\Cardiology\CardiologyContainer::collectCsrfToken();
+?>
+<!DOCTYPE html>
+<html>
+<head>
+    <?php Header::setupHeader(['dialog', 'jquery', 'bootstrap']); ?>
+</head>
+<body>
+    <button type="button" id="open-upload"
+            data-pid="<?php echo attr((string)$pid); ?>"
+            data-category-id="22001"
+            data-card-code="echo"
+            data-study-id="<?php echo attr((string)$studyId); ?>"
+            data-upload-url="<?php echo attr($uploadUrl); ?>"
+            data-csrf-token="<?php echo attr($csrfToken); ?>"
+            data-multiple="1">
+        <?php echo xlt('Upload documents'); ?>
+    </button>
+
+    <script src="<?php echo attr($GLOBALS['webroot']); ?>/interface/forms/form_cardiology/js/cardiology-upload.js"></script>
+    <script>
+    document.getElementById('open-upload').addEventListener('click', function () {
+        var button = this;
+        window.CardUpload.open({
+            pid: button.getAttribute('data-pid'),
+            categoryId: button.getAttribute('data-category-id'),
+            cardCode: button.getAttribute('data-card-code'),
+            studyId: button.getAttribute('data-study-id'),
+            url: button.getAttribute('data-upload-url'),
+            multiple: button.getAttribute('data-multiple') === '1' ? 1 : 0,
+            onDone: function (payload) {
+                if (!payload || !payload.documents) return;
+                console.log('Stored:', payload.documents.length);
+                console.log('Failed:', payload.errors.length);
+            }
+        });
+    });
+    </script>
+</body>
+</html>
+```
+
+The dialog reads its limits from `documents_upload.php`; do not hard-code a size
+or file-count limit in the embedding page. The visible allowed types, maximum
+size, and maximum files per request are generated server-side.
+
+### 14.6 Server-side security notes
+
+- Every POST verifies CSRF through `CardiologyContainer::verifyCsrfToken()`.
+- `pid` must match the active patient session; other patients' studies cannot be
+  linked.
+- `patients/docs` is required, and linked uploads additionally require
+  `CardRegistry::canWrite()` for the card.
+- A supplied `category_id` must exist and its `aco_spec` must pass core ACL.
+- Only `pdf`, `jpg`, `jpeg`, `png`, `tif`, and `tiff` are accepted.
+- The extension is checked first, then the real content type is detected with
+  fileinfo. Double extensions that hide executables are rejected.
+- The effective limit is the smallest of the module ceiling (50 MB),
+  `upload_max_filesize`, and `post_max_size`; the request is limited to 10
+  files. The dialog displays the effective limit returned by the server.
+- Display names are sanitized (path components, control characters, excessive
+  length) before they reach `Document::createDocument()`.
+- Documents are created only through OpenEMR's core `Document` class under the
+  validated category. All SQL uses prepared statements and no table or column
+  name comes from the request.
+- Every stored/linked file is audited (`doc_upload`) with card, study, document,
+  category, and size metadata, never clinical content.
+- The response is JSON-encoded and all dialog output is escaped.
+
+### 14.7 Compatibility with OpenEMR 8.2.0 – 8.5.0
+
+Feature detection is used; there are no version-number checks.
+
+- **`dlgopen`** exists in both 8.2.0 and 8.5.0. 8.5.0 drops `resolvePromiseOn`
+  from its defaults, so this module never passes or relies on it. If `dlgopen`
+  is absent, the Bootstrap iframe modal is used.
+- **`Header::setupHeader()`** accepts asset keys in both versions. `dialog`,
+  `jquery`, `bootstrap`, and `utility` are autoloaded in the OpenEMR layouts
+  used by this form. Request `dialog` explicitly when embedding elsewhere.
+- **Bootstrap / jQuery:** both 8.2.0 and 8.5.0 ship Bootstrap 4.6.2 and jQuery
+  3.7.1; the markup also tolerates Bootstrap 5 class names.
+- **`Document::createDocument()`** has the same signature in both versions,
+  including `foreign_reference_id` and `foreign_reference_table`, and
+  `get_id()` exists in both.
+- **`CsrfUtils`** requires a session argument in both versions. This module
+  routes all CSRF calls through `CardiologyContainer`, which reflects over the
+  method signature so both argument orders work.
+- **`AclMain`** exposes the same ACL methods; 8.5.0 mainly adds return types.
+- **Session accessors** are resolved through `CardiologyContainer::getSessionPid()`,
+  which uses core session utilities when available and falls back to
+  `$_SESSION` / `$GLOBALS`.
+- **Core document retrieval URL** stays
+  `<webroot>/controller.php?document&retrieve&patient_id=…&as_file=false&document_id=…`
+  in both versions.
+
+### 14.8 Cross-repository caution
+
+This dialog is internally reusable, but it is not a stable long-term shared
+library for unrelated repositories. Its formdir, category IDs, ACL expectations,
+Root URL, and `card_documents` schema are owned by `form_cardiology`. If another
+module needs the same UX, copy the contract and adapt the paths and category
+resolution there rather than pointing two repositories at one moving file.
 
 

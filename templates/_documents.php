@@ -4,8 +4,8 @@
  * Template Partial: Study Document Attachments
  *
  * Renders the "Documents" section in a card's view.php screen.
- * Lists attached documents, provides file upload controls, and allows linking
- * existing patient documents.
+ * Lists attached documents, opens the reusable upload dialog, and allows
+ * linking existing patient documents.
  *
  * Variables expected in scope:
  *   $cardCode  string  Card code (e.g. 'echo', 'stress_test', 'ecg', 'preop_risk', 'fitness')
@@ -32,8 +32,8 @@ require_once __DIR__ . '/../lib/CardDocuments.php';
 require_once __DIR__ . '/../lib/CardRegistry.php';
 require_once __DIR__ . '/../lib/CardiologyContainer.php';
 
-$studyId = (int)($studyId ?? 0);
-$pid     = (int)($pid ?? 0);
+$studyId  = (int)($studyId ?? 0);
+$pid      = (int)($pid ?? 0);
 $cardCode = (string)($cardCode ?? '');
 
 if ($studyId <= 0 || $pid <= 0 || $cardCode === '') {
@@ -60,18 +60,44 @@ if (!$hasDocsView) {
 
 $userId   = (int)($_SESSION['authUserID'] ?? 0);
 $registry = new CardRegistry();
-$canWrite = $registry->canWrite($cardCode, $userId) && AclMain::aclCheckCore('patients', 'docs');
+$canWrite = $registry->canWrite($cardCode, $userId) && $hasDocsView;
 
 $studyStatus = (string)($study['status'] ?? 'draft');
 $isFinal     = ($studyStatus === 'final');
 $finalizedAt = (string)($study['finalized_at'] ?? '');
 
-$attachments = CardDocuments::listForStudy($cardCode, $studyId, $pid);
-$csrfToken   = CardiologyContainer::collectCsrfToken();
-$apiUrl      = CardiologyContainer::getFormRootUrl() . '/documents_api.php';
-$retrieveUrlBase = $GLOBALS['webroot'] . '/controller.php?document&retrieve&patient_id=' . urlencode((string)$pid) . '&as_file=false&document_id=';
-$maxUploadBytes = CardDocuments::getMaxUploadBytes();
-$maxUploadText  = CardDocuments::formatBytes($maxUploadBytes);
+$attachments      = CardDocuments::listForStudy($cardCode, $studyId, $pid);
+$csrfToken        = CardiologyContainer::collectCsrfToken();
+$apiUrl           = CardiologyContainer::getFormRootUrl() . '/documents_api.php';
+$uploadUrl        = CardiologyContainer::getFormRootUrl() . '/documents_upload.php';
+$retrieveUrlBase  = $GLOBALS['webroot'] . '/controller.php?document&retrieve&patient_id=' . urlencode((string)$pid) . '&as_file=false&document_id=';
+$maxUploadBytes   = CardDocuments::getMaxUploadBytes();
+$maxUploadText    = CardDocuments::formatBytes($maxUploadBytes);
+$allowedExts      = CardDocuments::ALLOWED_EXTENSIONS;
+
+$docsI18n = [
+    'empty'               => xlt('No documents attached to this study.'),
+    'open'                => xlt('Open'),
+    'openTitle'           => xla('Open document'),
+    'unlink'              => xlt('Unlink'),
+    'unlinkTitle'         => xla('Unlink this attachment'),
+    'unlinkConfirm'       => xla('Are you sure you want to unlink this document from the study? The file itself will remain safely in the patient documents.'),
+    'postFinal'           => xlt('Added after finalization'),
+    'postFinalTitle'      => xla('This document was attached after the study was finalized.'),
+    'selectCandidate'     => xlt('-- Select an existing patient document --'),
+    'noCandidates'        => xlt('No unlinked patient documents found.'),
+    'candidatesAvailable' => xlt('-- Select a document (%d available) --'),
+    'errorLoading'        => xlt('Error loading candidate documents.'),
+    'uploadSuccess'       => xlt('%d document(s) uploaded successfully.'),
+    'uploadPartial'       => xlt('%d uploaded, %d failed.'),
+    'uploadFailed'        => xlt('No documents were uploaded.'),
+    'uploadCancelled'     => xlt('Upload cancelled.'),
+    'linkSuccess'         => xlt('Existing document linked successfully.'),
+    'linkError'           => xlt('Failed to attach existing document.'),
+    'unlinkSuccess'       => xlt('Attachment unlinked successfully.'),
+    'unlinkError'         => xlt('Failed to unlink document.'),
+    'networkError'        => xlt('Network error: %s'),
+];
 ?>
 <div class="card cardiology-documents-section mb-4"
      id="cardiology-documents-container"
@@ -82,6 +108,11 @@ $maxUploadText  = CardDocuments::formatBytes($maxUploadBytes);
      data-finalized-at="<?php echo attr($finalizedAt); ?>"
      data-can-write="<?php echo $canWrite ? '1' : '0'; ?>"
      data-api-url="<?php echo attr($apiUrl); ?>"
+     data-upload-url="<?php echo attr($uploadUrl); ?>"
+     data-upload-multiple="1"
+     data-upload-max-bytes="<?php echo attr((string)$maxUploadBytes); ?>"
+     data-upload-max-text="<?php echo attr($maxUploadText); ?>"
+     data-upload-allowed-exts="<?php echo attr(implode(',', $allowedExts)); ?>"
      data-retrieve-base="<?php echo attr($retrieveUrlBase); ?>"
      data-csrf-token="<?php echo attr($csrfToken); ?>">
 
@@ -95,8 +126,8 @@ $maxUploadText  = CardDocuments::formatBytes($maxUploadBytes);
         </span>
         <?php if ($canWrite) : ?>
         <div class="cardiology-docs-actions btn-group">
-            <button type="button" class="btn btn-sm btn-outline-primary" id="cardiology-btn-toggle-upload">
-                <i class="fa fa-upload me-1" aria-hidden="true"></i> <?php echo xlt('Upload File'); ?>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="cardiology-btn-open-upload">
+                <i class="fa fa-upload me-1" aria-hidden="true"></i> <?php echo xlt('Upload documents'); ?>
             </button>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="cardiology-btn-open-picker">
                 <i class="fa fa-folder-open me-1" aria-hidden="true"></i> <?php echo xlt('Attach Existing'); ?>
@@ -106,57 +137,25 @@ $maxUploadText  = CardDocuments::formatBytes($maxUploadBytes);
     </div>
 
     <div class="card-body">
-        <!-- Status / Alert message box -->
-        <div id="cardiology-docs-alert" class="alert d-none" role="alert"></div>
+        <div id="cardiology-docs-alert" class="alert d-none" role="alert" aria-live="polite"></div>
 
         <?php if ($canWrite) : ?>
-        <!-- Upload Form Panel (toggled via button) -->
-        <div id="cardiology-upload-panel" class="card mb-3 bg-light border-light d-none">
-            <div class="card-body p-3">
-                <h6 class="card-title mb-2">
-                    <i class="fa fa-cloud-upload me-1 text-primary"></i> <?php echo xlt('Upload New Document'); ?>
-                </h6>
-                <form id="cardiology-upload-form" enctype="multipart/form-data">
-                    <div class="row align-items-center">
-                        <div class="col-md-8 col-sm-12 mb-2">
-                            <input type="file"
-                                   id="cardiology-file-input"
-                                   name="doc_files[]"
-                                   class="form-control form-control-sm"
-                                   multiple
-                                   accept=".pdf,.jpg,.jpeg,.png,.tif,.tiff">
-                            <small class="text-muted d-block mt-1">
-                                <?php echo sprintf(
-                                    xlt('Allowed types: PDF, JPG, PNG, TIF. Maximum total size: %s. Multiple files allowed.'),
-                                    text($maxUploadText)
-                                ); ?>
-                            </small>
-                        </div>
-                        <div class="col-md-4 col-sm-12 mb-2 text-md-end">
-                            <button type="submit" class="btn btn-sm btn-primary" id="cardiology-upload-submit-btn">
-                                <i class="fa fa-upload me-1"></i> <?php echo xlt('Start Upload'); ?>
-                            </button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary ms-1" id="cardiology-upload-cancel-btn">
-                                <?php echo xlt('Cancel'); ?>
-                            </button>
-                        </div>
-                    </div>
-                    <div id="cardiology-upload-progress" class="progress mt-2 d-none" style="height: 6px;">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary"
-                             role="progressbar" style="width: 100%"></div>
-                    </div>
-                </form>
-            </div>
-        </div>
+        <p class="small text-muted mb-2">
+            <?php echo sprintf(
+                xlt('Allowed types: %s. Maximum size per file: %s.'),
+                text(strtoupper(implode(', ', $allowedExts))),
+                text($maxUploadText)
+            ); ?>
+        </p>
 
         <!-- Attach Existing Document Picker Panel (toggled via button) -->
         <div id="cardiology-picker-panel" class="card mb-3 bg-light border-light d-none">
             <div class="card-body p-3">
                 <h6 class="card-title mb-2">
-                    <i class="fa fa-link me-1 text-secondary"></i> <?php echo xlt('Link Existing Patient Document'); ?>
+                    <i class="fa fa-link me-1 text-secondary" aria-hidden="true"></i> <?php echo xlt('Link Existing Patient Document'); ?>
                 </h6>
                 <div id="cardiology-picker-loading" class="text-muted small py-2 d-none">
-                    <i class="fa fa-spinner fa-spin me-1"></i> <?php echo xlt('Loading candidate documents...'); ?>
+                    <i class="fa fa-spinner fa-spin me-1" aria-hidden="true"></i> <?php echo xlt('Loading candidate documents...'); ?>
                 </div>
                 <div id="cardiology-picker-content">
                     <div class="row g-2 align-items-center">
@@ -167,7 +166,7 @@ $maxUploadText  = CardDocuments::formatBytes($maxUploadBytes);
                         </div>
                         <div class="col-md-3 col-sm-12 text-md-end">
                             <button type="button" class="btn btn-sm btn-secondary" id="cardiology-btn-confirm-link" disabled>
-                                <i class="fa fa-link me-1"></i> <?php echo xlt('Attach'); ?>
+                                <i class="fa fa-link me-1" aria-hidden="true"></i> <?php echo xlt('Attach'); ?>
                             </button>
                             <button type="button" class="btn btn-sm btn-outline-secondary ms-1" id="cardiology-picker-cancel-btn">
                                 <?php echo xlt('Cancel'); ?>
@@ -204,17 +203,16 @@ $maxUploadText  = CardDocuments::formatBytes($maxUploadBytes);
                     </tr>
                     <?php else : ?>
                         <?php foreach ($attachments as $att) :
-                            $docId       = (int)$att['document_id'];
-                            $linkId      = (int)$att['link_id'];
-                            $docName     = (string)$att['doc_name'];
+                            $docId        = (int)$att['document_id'];
+                            $linkId       = (int)$att['link_id'];
+                            $docName      = (string)$att['doc_name'];
                             $categoryName = (string)($att['category_name'] ?? '');
-                            $docDate     = (string)($att['doc_date'] ?? $att['linked_at'] ?? '');
-                            $uploadedBy  = (string)($att['created_by'] ?? '');
-                            $sizeBytes   = (int)($att['size'] ?? 0);
+                            $docDate      = (string)($att['doc_date'] ?? $att['linked_at'] ?? '');
+                            $uploadedBy   = (string)($att['created_by'] ?? '');
+                            $sizeBytes    = (int)($att['size'] ?? 0);
                             $sizeFormatted = CardDocuments::formatBytes($sizeBytes);
-                            $linkedAt    = (string)($att['linked_at'] ?? '');
+                            $linkedAt     = (string)($att['linked_at'] ?? '');
 
-                            // Check if attached after finalization
                             $postFinalNote = false;
                             if ($isFinal && $finalizedAt !== '' && $linkedAt !== '' && $linkedAt > $finalizedAt) {
                                 $postFinalNote = true;
@@ -275,4 +273,5 @@ $maxUploadText  = CardDocuments::formatBytes($maxUploadBytes);
         </div>
     </div>
 </div>
-
+<script type="application/json" id="cardiology-docs-i18n"><?php echo json_encode($docsI18n, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE); ?></script>
+<script src="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/js/cardiology-upload.js?v=<?php echo attr($GLOBALS['v_js_includes'] ?? ''); ?>"></script>
