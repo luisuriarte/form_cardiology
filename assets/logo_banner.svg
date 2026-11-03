@@ -24,9 +24,9 @@
      inkscape:pageopacity="0.0"
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
-     inkscape:zoom="0.6257895"
-     inkscape:cx="291.63161"
-     inkscape:cy="-157.40117"
+     inkscape:zoom="0.885"
+     inkscape:cx="393.78531"
+     inkscape:cy="-62.711865"
      inkscape:window-width="1920"
      inkscape:window-height="1009"
      inkscape:window-x="-8"
@@ -168,8 +168,7 @@
        fill="#ffffff"
        stroke="#e2e8f0"
        stroke-width="2"
-       id="rect4"
-       style="fill:none" />
+       id="rect4" />
     <!-- ISOTIPO (Corazón con Familia) -->
     <g
        transform="translate(60,45)"
@@ -227,7 +226,7 @@
     </g>
     <!-- TIPOGRAFÍA Y TEXTOS -->
     <g
-       transform="translate(320,140)"
+       transform="translate(328.85045,134.35028)"
        id="g11">
       <!-- Nombre de la Clínica -->
       <!-- Línea divisoria elegante -->
@@ -272,14 +271,14 @@
       <text
          xml:space="preserve"
          style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:13.1773px;font-family:Arial;-inkscape-font-specification:'Arial, Normal';font-variant-ligatures:normal;font-variant-position:super;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;text-align:center;writing-mode:lr-tb;direction:ltr;text-anchor:middle;fill:#0e2d14;fill-opacity:1;stroke:none;stroke-width:0.392993;stroke-opacity:1"
-         x="548.33362"
-         y="282.48819"
+         x="229.60527"
+         y="136.65869"
          id="text3"
-         transform="matrix(1.0416393,0,0,0.96002521,-320,-140)"><tspan
+         transform="scale(1.0416393,0.96002522)"><tspan
            sodipodi:role="line"
            id="tspan3"
-           x="548.33362"
-           y="282.48819"
+           x="229.60527"
+           y="136.65869"
            style="stroke-width:0.392993">Identidad profesional · Moderna · Familiar</tspan></text>
     </g>
   </g>
