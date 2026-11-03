@@ -84,12 +84,14 @@ interface/forms/form_cardiology/
 ├── config.php                      Admin: habilitar/deshabilitar módulos por usuario
 │
 ├── sql/
-│   └── upgrade_001_new_cards.sql   Migración idempotente para instalaciones existentes (ECG, Preop, Aptitud)
+│   ├── upgrade_001_new_cards.sql   Migración idempotente para instalaciones existentes (ECG, Preop, Aptitud)
+│   └── upgrade_004_cards_batch2.sql Migración idempotente para anticoag, hf_followup y holter
 │
 ├── lib/
 │   ├── CardiologyContainer.php     ensureContainer(), getContainer(), softDelete(), transacciones, sesiones
 │   ├── CardRegistry.php            getVisibleCards(), canWrite() con filtrado por ACL y config
 │   ├── CardInput.php               Helper de validación y sanitización estricta (decimal, int, text, dateTime, listOption, flag)
+│   ├── CardAnticoag.php            Cálculo de tiempo en rango terapéutico (TTR) por método de Rosendaal
 │   └── CardCharts.php              Motor reutilizable de gráficos (evolución longitudinal y etapas)
 │
 ├── css/
@@ -135,13 +137,34 @@ interface/forms/form_cardiology/
     │   ├── save.php                Guardado robusto con cálculo de puntaje y clase Lee RCRI
     │   ├── print.php               Informe imprimible / PDF con factores de riesgo
     │   └── preop_risk.js           Cálculo interactivo en tiempo real de puntaje y clase Lee
-    └── fitness/
-        ├── README.md               Documentación del módulo de aptitud física
-        ├── new.php                 Nuevo certificado (vigencia predefinida a +12 meses)
-        ├── view.php                Ver / editar certificado existente
-        ├── save.php                Guardado robusto con cálculo de IMC y reglas de vigencia
-        ├── print.php               Certificado imprimible con leyenda médico-legal y matrícula
-        └── fitness.js              Cálculo interactivo en tiempo real de IMC y validación de UI
+    ├── fitness/
+    │   ├── README.md               Documentación del módulo de aptitud física
+    │   ├── new.php                 Nuevo certificado (vigencia predefinida a +12 meses)
+    │   ├── view.php                Ver / editar certificado existente
+    │   ├── save.php                Guardado robusto con cálculo de IMC y reglas de vigencia
+    │   ├── print.php               Certificado imprimible con leyenda médico-legal y matrícula
+    │   └── fitness.js              Cálculo interactivo en tiempo real de IMC y validación de UI
+    ├── anticoag/
+    │   ├── charts.php              Gráficos de evolución de INR/rango objetivo y dosis semanal
+    │   ├── new.php                 Nuevo control de anticoagulación (precargado del último estudio final)
+    │   ├── view.php                Ver / editar estudio con panel TTR de Rosendaal
+    │   ├── save.php                Guardado robusto con cálculo de in_range y dose_change_pct
+    │   ├── print.php               Informe imprimible / PDF con TTR y documentos adjuntos
+    │   └── _form_fields.php        Campos de formulario compartidos
+    ├── hf_followup/
+    │   ├── charts.php              Gráficos de peso, NYHA, péptidos natriuréticos, creatinina y potasio
+    │   ├── new.php                 Nuevo seguimiento de insuficiencia cardíaca (precargado del último estudio final)
+    │   ├── view.php                Ver / editar estudio con gráficos de evolución
+    │   ├── save.php                Guardado robusto con cálculo de nyha_numeric y weight_change_kg
+    │   ├── print.php               Informe imprimible / PDF con documentos adjuntos
+    │   └── _form_fields.php        Campos de formulario compartidos
+    └── holter/
+        ├── charts.php              Gráficos de frecuencia cardíaca, carga de PVC/FA y pausas
+        ├── new.php                 Nuevo estudio de Holter
+        ├── view.php                Ver / editar estudio con gráficos de evolución
+        ├── save.php                Guardado robusto con cálculo de pvc_burden_pct
+        ├── print.php               Informe imprimible / PDF con documentos adjuntos
+        └── _form_fields.php        Campos de formulario compartidos
 ```
 
 ---
@@ -162,7 +185,7 @@ Copiar el directorio completo a:
 Ejecutar **en orden** los siguientes scripts en la base de datos de OpenEMR:
 
 ```bash
-# 1. Crear contenedor base y tablas de los 5 módulos con semillas de list_options
+# 1. Crear contenedor base y tablas de los 8 módulos con semillas de list_options
 mysql -u <usuario> -p <base_de_datos> < table.sql
 
 # 2. Cargar traducciones al español (Argentina)
@@ -182,6 +205,20 @@ mysql -u <usuario> -p <base_de_datos> < lang_custom.sql
 
 > [!NOTE]
 > `sql/upgrade_001_new_cards.sql` es completamente idempotente: utiliza `CREATE TABLE IF NOT EXISTS` e `INSERT IGNORE`, por lo que puede re-ejecutarse con seguridad sin alterar datos existentes ni provocar colisiones.
+
+#### 4.2.3 Actualización de instalación existente (`sql/upgrade_004_cards_batch2.sql`)
+Para agregar los módulos del lote 2 (`anticoag`, `hf_followup`, `holter`) a una instalación que ya tiene el contenedor y los módulos anteriores:
+
+```bash
+# 1. Crear tablas, módulos y opciones de lista de anticoagulación, insuficiencia cardíaca y Holter
+mysql -u <usuario> -p <base_de_datos> < sql/upgrade_004_cards_batch2.sql
+
+# 2. Actualizar traducciones
+mysql -u <usuario> -p <base_de_datos> < lang_custom.sql
+```
+
+> [!NOTE]
+> `sql/upgrade_004_cards_batch2.sql` es idempotente y sólo usa `CREATE TABLE IF NOT EXISTS` e `INSERT IGNORE`; no altera tablas, listas ni semillas existentes. El mismo DDL y las mismas semillas están agregados a `table.sql` para instalaciones nuevas.
 
 ### 4.3 Registrar el formulario en OpenEMR
 
@@ -227,7 +264,7 @@ La pantalla de configuración (`config.php`) requiere `admin / super`.
 
 ## 6. Especificación de módulos clínicos
 
-El módulo integra 5 tarjetas clínicas diseñadas para la práctica cardiológica ambulatoria:
+El módulo integra 8 tarjetas clínicas diseñadas para la práctica cardiológica ambulatoria:
 
 | Código | Título | Tabla principal | Características clave y cálculos | Requisito para Finalizar |
 |---|---|---|---|---|
@@ -236,6 +273,57 @@ El módulo integra 5 tarjetas clínicas diseñadas para la práctica cardiológi
 | `ecg` | ECG de 12 derivaciones | `form_card_ecg` | Ritmo, intervalos de conducción (PR, QRS, QT), eje eléctrico, repolarización ventricular. Fórmulas: QTc Bazett = `QT / sqrt(60/FC)`, QTc Fridericia = `QT / cbrt(60/FC)`. Cálculo en tiempo real en `ecg.js`. | `conclusion` |
 | `preop_risk` | Riesgo Cardiovascular Preoperatorio | `form_card_preop_risk` | Índice de Riesgo Cardíaco Revisado (RCRI de Lee) con 6 predictores clínicos (cirugía de alto riesgo, cardiopatía isquémica, insuficiencia cardíaca, enfermedad cerebrovascular, diabetes insulino-requiriente, creatinina > 2.0 mg/dL). Calcula puntaje (0 a 6) y Clase Lee (I a IV). Evaluación neutral sin porcentajes fijos de eventos. Cálculo en tiempo real en `preop_risk.js`. | `recommendation` Y `conclusion` |
 | `fitness` | Certificado de Aptitud Cardiológica | `form_card_fitness` | Antropometría (peso, talla, ASC, cálculo automático de IMC = `kg/m²`), examen cardiovascular, resúmenes de ECG y ergometría, dictamen (`fit`, `fit_restrictions`, `unfit`, `temporary_unfit`), actividades deportivas, restricciones clínicas (obligatorias si `fit_restrictions`), fecha de vigencia `valid_until` (predefinida +12 meses, debe superar `study_date`). Impresión de certificado oficial con declaración médico-legal neutral: *"En base al examen realizado el <fecha>, el paciente se considera <dictamen>."* y número de matrícula médica (`state_license_number`). Cálculo en tiempo real en `fitness.js`. | `determination`, `valid_until`, `conclusion`, y `restrictions` (si `fit_restrictions`) |
+| `anticoag` | Control de Anticoagulación | `form_card_anticoag` | Indicación, antagonista de vitamina K, tipo de muestra de INR, INR medido y rango objetivo, dosis semanal y cambio de dosis calculado, adherencia, eventos hemorrágicos/trombóticos, fecha de próximo control. Valores calculados: `in_range` (`in`, `below`, `above`) y `dose_change_pct = (nueva − actual) / actual × 100`. La vista y la impresión también muestran el TTR de Rosendaal. | `inr_value`, rango objetivo bajo/alto, `next_control_date` y `conclusion` |
+| `hf_followup` | Seguimiento de Insuficiencia Cardíaca | `form_card_hf_followup` | Clase NYHA, tipo/etiología/estadio de IC, estado volémico y signos vitales, hallazgos de congestión, FEVI y laboratorio, indicadores de tratamiento dirigido, hospitalizaciones/urgencias, educación, plan. Valores calculados: `nyha_numeric` (I–IV → 1–4) y `weight_change_kg` respecto del estudio final anterior. | `nyha_class` y `conclusion` |
+| `holter` | Estudio de Monitor Holter | `form_card_holter` | Duración del registro, latidos totales, frecuencia cardíaca mínima/media/máxima y horarios, ritmo dominante (`card_ecg_rhythm`), carga de FA y de latidos estimulados, pausas, recuentos de PVC/PAC, dobletes, rachas de TVNS/TSV, episodios de ST, bloqueo AV, síntomas y correlación, hallazgos. Valor calculado: `pvc_burden_pct = pvc_total / total_beats × 100`. | `recording_hours` y `conclusion` |
+
+### 6.1 Detalle de los módulos del lote 2
+
+Las tres tarjetas siguen el mismo flujo que las anteriores: los borradores son editables, los estudios finalizados son de sólo lectura, toda solicitud se valida en el servidor y ningún valor calculado se lee desde `POST`.
+
+#### `anticoag` – Control de Anticoagulación
+
+- **Campos:** `study_date`, `indication`, `drug`, `sample_type`, `inr_value`, `target_inr_low`, `target_inr_high`, `in_range`, `current_weekly_dose_mg`, `new_weekly_dose_mg`, `dose_change_pct`, `dosing_schedule`, `missed_doses`, `bleeding_event`, `thrombotic_event`, `event_detail`, `adherence`, `interacting_factors`, `next_control_date`, `plan`, `conclusion`, `comments`.
+- **Listas:** `card_anticoag_indication`, `card_anticoag_drug`, `card_inr_sample`, `card_adherence`.
+- **Límites de plausibilidad:** INR `0.5–10`, objetivo bajo `1.0–4.0`, objetivo alto `1.5–5.0` (y el alto debe ser mayor que el bajo), dosis semanales `0–200 mg`.
+- **Valores calculados:** `in_range` compara el INR con el rango objetivo (`below`, `in`, `above`). `dose_change_pct` es `(nueva − actual) / actual × 100` y queda `NULL` cuando la dosis actual falta o es cero.
+- **Reglas de finalización:** se requieren `inr_value`, ambos límites del rango, `next_control_date` y `conclusion`. La fecha de próximo control debe ser estrictamente posterior a la fecha del estudio y no más de 365 días después. `event_detail` es obligatorio cuando `bleeding_event` o `thrombotic_event` está marcado.
+- **Precarga:** un estudio nuevo copia `indication`, `drug`, `sample_type`, `target_inr_low`, `target_inr_high` y `new_weekly_dose_mg` (como `current_weekly_dose_mg`) del último estudio **final** del mismo paciente.
+
+#### `hf_followup` – Seguimiento de Insuficiencia Cardíaca
+
+- **Campos:** `study_date`, `nyha_class`, `nyha_numeric`, `hf_type`, `etiology`, `hf_stage`, `weight_kg`, `dry_weight_kg`, `weight_change_kg`, `heart_rate_bpm`, `bp_systolic_mmhg`, `bp_diastolic_mmhg`, `spo2_pct`, `edema`, `jugular_distension`, `rales`, `orthopnea`, `pnd`, `congestion_note`, `lvef_pct`, `lvef_date`, `nt_probnp_pg_ml`, `bnp_pg_ml`, `creatinine_mg_dl`, `potassium_mmol_l`, `sodium_mmol_l`, `adherence`, `on_raas_inhibitor`, `on_beta_blocker`, `on_mra`, `on_sglt2_inhibitor`, `on_loop_diuretic`, `medications_note`, `hospitalizations_since_last`, `er_visits_since_last`, `education_given`, `plan`, `next_control_date`, `conclusion`, `comments`.
+- **Listas:** `card_nyha`, `card_hf_type`, `card_hf_etiology`, `card_hf_stage`, `card_edema_grade`, `card_adherence`.
+- **Límites de plausibilidad:** peso/peso seco `20–300 kg`, frecuencia cardíaca `20–250`, presión sistólica `40–300`, diastólica `20–200`, SpO₂ `50–100 %`, FEVI `5–90 %`, NT-proBNP `0–70000 pg/mL`, BNP `0–5000 pg/mL`, creatinina `0.1–15 mg/dL`, potasio `1.5–8 mmol/L`, sodio `100–170 mmol/L`, hospitalizaciones/urgencias `0–50`.
+- **Valores calculados:** `nyha_numeric` convierte la clase seleccionada (`i`–`iv`) en `1–4`. `weight_change_kg` es el `weight_kg` actual menos el `weight_kg` del estudio **final** anterior del mismo paciente con `study_date` previo al actual (se excluye la fila actual al editar).
+- **Reglas cruzadas:** `lvef_date` no puede ser futura; un `next_control_date` opcional debe ser posterior a la fecha del estudio.
+- **Reglas de finalización:** se requieren `nyha_class` y `conclusion`.
+- **Precarga:** un estudio nuevo copia `hf_type`, `etiology`, `hf_stage`, `dry_weight_kg`, los cinco indicadores `on_*` y `medications_note` del último estudio **final** del mismo paciente.
+
+#### `holter` – Estudio de Monitor Holter
+
+- **Campos:** `study_date`, `indication`, `recording_hours`, `total_beats`, `hr_min_bpm`, `hr_mean_bpm`, `hr_max_bpm`, `hr_min_time`, `hr_max_time`, `dominant_rhythm`, `af_present`, `af_burden_pct`, `paced_beats_pct`, `longest_pause_ms`, `pauses_gt_3s`, `pvc_total`, `pvc_burden_pct`, `pvc_couplets`, `nsvt_runs`, `longest_nsvt_beats`, `pac_total`, `svt_runs`, `longest_svt_beats`, `st_episodes`, `st_description`, `av_block_note`, `symptoms_reported`, `symptom_correlation`, `findings`, `conclusion`, `comments`.
+- **Listas:** `dominant_rhythm` usa la lista existente `card_ecg_rhythm`; no se crea una lista de ritmos nueva.
+- **Límites de plausibilidad:** registro `1–168 h`, latidos totales `100–2000000`, FC mínima `20–200`, media `30–220`, máxima `40–300`, cargas `0–100 %`, pausa más larga `0–30000 ms`, pausas > 3 s `0–1000`, PVC `0–500000`, dobletes `0–100000`, rachas de TVNS `0–10000`, TVNS más larga `0–1000 latidos`, PAC `0–500000`, rachas de TSV `0–10000`, TSV más larga `0–10000 latidos`, episodios de ST `0–1000`.
+- **Reglas cruzadas:** `pvc_total` no puede superar `total_beats`; cuando los tres están presentes, las frecuencias deben cumplir `hr_min ≤ hr_mean ≤ hr_max`. Los horarios aceptan `HH:MM` o `HH:MM:SS` y se almacenan como `HH:MM:SS`.
+- **Valor calculado:** `pvc_burden_pct = pvc_total / total_beats × 100`.
+- **Reglas de finalización:** se requieren `recording_hours` y `conclusion`.
+
+### 6.2 Tiempo en rango terapéutico (TTR, método de Rosendaal)
+
+`lib/CardAnticoag.php::ttr(int $pid, string $studyDate, int $windowDays = 180)` calcula el TTR de un paciente:
+
+1. Selecciona sólo estudios de anticoagulación **finales**, activos, con INR no nulo, rango objetivo válido (`high > low`) y `DATE(study_date)` dentro de la ventana que termina en la fecha de referencia (180 días por defecto). Los resultados se ordenan por `study_date ASC, id ASC`.
+2. Cada par consecutivo de pruebas forma un intervalo. Los intervalos mayores de **56 días** se omiten porque la interpolación lineal no se considera confiable en una brecha tan extensa.
+3. La **prueba anterior** del intervalo aporta el rango objetivo para todo el intervalo.
+4. El INR se interpola linealmente entre ambas pruebas y se calcula la fracción del intervalo dentro del rango objetivo. El TTR es `Σ(días del intervalo × fracción en rango) / Σ(días del intervalo) × 100`.
+5. La función devuelve `ttr_pct` (un decimal o `null`), `days_evaluated`, `tests` y `message`. Con menos de dos pruebas utilizables (o sin intervalos utilizables), `ttr_pct` es `null` y se muestra el mensaje traducido **«Datos insuficientes»**. `view.php` y `print.php` muestran el porcentaje y los días evaluados.
+
+**Ejemplo manual:** pruebas finales del 2026-01-01 (INR 2.0, objetivo 2.0–3.0), 2026-01-11 (INR 3.0, el objetivo cambia a 2.5–3.5) y 2026-02-10 (INR 1.0).
+
+- Intervalo 1 (2026-01-01 → 2026-01-11, 10 días) usa el objetivo anterior 2.0–3.0. El INR sube de 2.0 a 3.0, por lo que permanece dentro del rango todo el intervalo: `10 × 1 = 10` días en rango.
+- Intervalo 2 (2026-01-11 → 2026-02-10, 30 días) sigue usando el objetivo anterior 2.5–3.5. El INR cae linealmente de 3.0 a 1.0 y cruza 2.5 tras una caída de 0.5 sobre la caída total de 2.0, es decir, un cuarto del intervalo, por lo que está en rango 7.5 de 30 días: `30 × 0.25 = 7.5` días en rango.
+- TTR = `(10 + 7.5) / (10 + 30) × 100 = 43.8 %` sobre **40 días evaluados**.
 
 ---
 
@@ -778,6 +866,48 @@ Ejecutar estos pasos en una instalación de prueba antes de desplegar en producc
 - [ ] **OpenEMR 8.2.0 y 8.5.0:** repetir las pruebas de PDF único, resultado parcial, cancelación y Escape en ambas versiones. Verificar que no se usan comprobaciones por número de versión y que el mismo código funciona.
 - [ ] **Escape y Cerrar:** presionar Escape antes de subir (el diálogo se cierra), durante la subida (la subida se cancela), y usar tanto la X del encabezado como el botón **Cerrar** inferior. Verificar que el opener siempre elimina su listener de `message`.
 
+### 14.43 Anticoagulación: borrador, finalización y TTR
+- [ ] Abrir la tarjeta **Control de Anticoagulación** (`anticoag`) en una consulta activa.
+- [ ] Ingresar INR `2.4`, objetivo bajo `2.0`, objetivo alto `3.0`, dosis semanal actual `35`, dosis nueva `30` y una conclusión. Presionar **Guardar borrador**.
+- [ ] Verificar que el estudio queda en `draft`, `in_range = 'in'` y `dose_change_pct = -14.29`.
+- [ ] Presionar **Finalizar**. Verificar que el estudio pasa a `final`, queda de sólo lectura y se completan usuario/fecha de finalización.
+- [ ] Verificar que `view.php` y `print.php` muestran el TTR (o **Datos insuficientes** cuando hay menos de dos estudios finales utilizables) y los días evaluados.
+- [ ] Intentar un POST directo para editar el estudio finalizado. Verificar el rechazo con `This study is finalized and cannot be edited.`.
+- [ ] Presionar **Imprimir**. Verificar encabezado del paciente, INR/objetivo, dosis, eventos, TTR, conclusión y documentos adjuntos.
+
+### 14.44 Anticoagulación: rechazo por campos obligatorios y reglas cruzadas
+- [ ] Finalizar sin INR. Verificar el rechazo con `An INR value is required to finalize the study.`.
+- [ ] Finalizar con objetivo bajo `3.0` y alto `2.5`. Verificar el rechazo con `The upper target INR must be greater than the lower target INR.`.
+- [ ] Finalizar sin fecha de próximo control y luego con la misma fecha del estudio. Verificar los rechazos correspondientes.
+- [ ] Establecer la fecha de próximo control a más de 365 días del estudio. Verificar el rechazo por el límite de 365 días.
+- [ ] Marcar `Bleeding event` y dejar `Event detail` vacío. Verificar el rechazo que exige el detalle del evento.
+- [ ] Ingresar INR `0.4` (menor que `0.5`) y objetivo bajo `0.9` (menor que `1.0`). Verificar ambos rechazos por fuera de rango.
+- [ ] Ingresar decimales con coma (`2,4`, `2,0`, `3,0`) y verificar que se aceptan y almacenan como `2.40`, `2.00`, `3.00`.
+
+### 14.45 Seguimiento de Insuficiencia Cardíaca: cálculos, finalización y precarga
+- [ ] Abrir la tarjeta **Seguimiento de Insuficiencia Cardíaca** (`hf_followup`).
+- [ ] Seleccionar NYHA `Class III`, peso `82.5 kg`, FEVI `30 %` y una conclusión. Verificar que el número de clase NYHA calculado sea `3`.
+- [ ] Guardar un primer estudio final y luego crear un estudio nuevo del mismo paciente con peso `80.0 kg`. Verificar `weight_change_kg = -2.500` respecto del estudio final anterior.
+- [ ] Verificar que el formulario nuevo se precarga con `hf_type`, `etiology`, `hf_stage`, `dry_weight_kg`, los cinco indicadores `on_*` y `medications_note` del último estudio final.
+- [ ] Establecer `lvef_date` en mañana. Verificar el rechazo con `The LVEF date cannot be in the future.`.
+- [ ] Establecer una fecha de próximo control opcional igual o anterior al estudio. Verificar el rechazo correspondiente.
+- [ ] Finalizar sin clase NYHA. Verificar el rechazo con `An NYHA class is required to finalize the study.`.
+- [ ] Verificar rechazos fuera de rango: peso `19`/`301`, FC `19`, presión sistólica `39`, diastólica `19`, SpO₂ `49`, FEVI `4`/`91`, NT-proBNP `70001`, BNP `5001`, creatinina `0.09`/`16`, potasio `1.4`/`9`, sodio `99`/`171`, hospitalizaciones/urgencias `51`.
+- [ ] Verificar que se aceptan decimales con coma, que los cálculos se recalculan en el servidor (enviar `nyha_numeric`/`weight_change_kg` falsificados y confirmar que se ignoran) y que la impresión muestra los documentos adjuntos.
+- [ ] Finalizar un estudio e intentar un POST directo de edición; verificar `This study is finalized and cannot be edited.`.
+
+### 14.46 Holter: cálculos, reglas cruzadas y precarga
+- [ ] Abrir la tarjeta **Estudio de Monitor Holter** (`holter`).
+- [ ] Ingresar duración `24` horas, latidos totales `100000`, PVC `5000` y una conclusión. Verificar `pvc_burden_pct = 5.00`.
+- [ ] Establecer FC mínima `55`, media `70`, máxima `120`. Verificar que el estudio se guarda.
+- [ ] Establecer mínima `80`, media `70`, máxima `120`. Verificar el rechazo por el orden de frecuencias.
+- [ ] Establecer PVC `100001` con latidos totales `100000`. Verificar el rechazo con `The PVC count cannot exceed the total beat count.`.
+- [ ] Finalizar sin duración de registro. Verificar el rechazo con `A recording duration is required to finalize the study.`.
+- [ ] Verificar rechazos fuera de rango: registro `0`/`169`, latidos totales `99`/`2000001`, FC mínima `19`, media `29`, máxima `39`, cargas `-1`/`101`, pausa más larga `30001`, pausas > 3 s `1001`, PVC `500001`, dobletes `100001`, rachas TVNS `10001`, TVNS más larga `1001`, PAC `500001`, rachas TSV `10001`, TSV más larga `10001`, episodios ST `1001`.
+- [ ] Verificar que las opciones de `dominant_rhythm` provienen de la lista existente `card_ecg_rhythm` y que los horarios `HH:MM` y `HH:MM:SS` se aceptan y almacenan como `HH:MM:SS`.
+- [ ] Verificar que se aceptan decimales con coma, que un `pvc_burden_pct` falsificado en POST se ignora y que los gráficos se renderizan con múltiples estudios y valores nulos.
+- [ ] Finalizar un estudio, intentar un POST directo de edición y verificar el rechazo. Luego presionar **Imprimir** y verificar encabezado del paciente, frecuencias, cargas, pausas, ectopía, conclusión y adjuntos.
+
 ---
 
 ## 15. Arquitectura de documentos adjuntos (`card_documents`)
@@ -820,7 +950,7 @@ Categorías sembradas bajo la raíz principal de documentos (ID `1`):
 ## 16. Diálogo reutilizable de subida de documentos
 
 La sección de Documentos Adjuntos ya no contiene un formulario de subida
-embebido. Las cinco vistas de estudio incluyen `templates/_documents.php`, que
+embebido. Las ocho vistas de estudio incluyen `templates/_documents.php`, que
 abre el diálogo reutilizable de `documents_upload.php` mediante la API pública
 `CardUpload` de JavaScript.
 

@@ -38,7 +38,10 @@ form_cardiology  (one row per encounter – the "container")
    │      └── form_card_stress_test_stage  (M stages per study)
    ├── form_card_ecg            (N studies per encounter: 12-Lead ECG)
    ├── form_card_preop_risk     (N studies per encounter: Preoperative Cardiovascular Risk)
-   └── form_card_fitness        (N studies per encounter: Cardiology Fitness Certificate)
+   ├── form_card_fitness        (N studies per encounter: Cardiology Fitness Certificate)
+   ├── form_card_anticoag       (N studies per encounter: Anticoagulation Monitoring)
+   ├── form_card_hf_followup    (N studies per encounter: Heart Failure Follow-up)
+   └── form_card_holter         (N studies per encounter: Holter Monitor Study)
 ```
 
 **One container per encounter.**
@@ -66,12 +69,14 @@ interface/forms/form_cardiology/
 ├── config.php                      Admin: enable/disable cards per user
 │
 ├── sql/
-│   └── upgrade_001_new_cards.sql   Idempotent migration for existing installs (ECG, Preop, Fitness)
+│   ├── upgrade_001_new_cards.sql   Idempotent migration for existing installs (ECG, Preop, Fitness)
+│   └── upgrade_004_cards_batch2.sql Idempotent migration for anticoag, hf_followup and holter
 │
 ├── lib/
 │   ├── CardiologyContainer.php     ensureContainer(), getContainer(), softDelete(), transactions, session helpers
 │   ├── CardRegistry.php            getVisibleCards(), canWrite() with ACL + config filtering
 │   ├── CardInput.php               Strict typed validation & sanitization helper (decimal, int, text, dateTime, listOption, flag)
+│   ├── CardAnticoag.php            Rosendaal time in therapeutic range (TTR) calculation
 │   └── CardCharts.php              Reusable charting engine (longitudinal evolution and stage series)
 │
 ├── css/
@@ -117,13 +122,34 @@ interface/forms/form_cardiology/
     │   ├── save.php                Hardened save handler with Lee RCRI score/class
     │   ├── print.php               Printable / PDF report view
     │   └── preop_risk.js           Real-time client-side calculation of Lee RCRI score & class
-    └── fitness/
-        ├── README.md               Card specification and schema documentation
-        ├── new.php                 New fitness certificate form (valid_until pre-filled +12m)
-        ├── view.php                View / edit existing certificate
-        ├── save.php                Hardened save handler with BMI calculation & validity rules
-        ├── print.php               Printable / PDF certificate view with physician license block
-        └── fitness.js              Real-time client-side calculation of BMI & UI state
+    ├── fitness/
+    │   ├── README.md               Card specification and schema documentation
+    │   ├── new.php                 New fitness certificate form (valid_until pre-filled +12m)
+    │   ├── view.php                View / edit existing certificate
+    │   ├── save.php                Hardened save handler with BMI calculation & validity rules
+    │   ├── print.php               Printable / PDF certificate view with physician license block
+    │   └── fitness.js              Real-time client-side calculation of BMI & UI state
+    ├── anticoag/
+    │   ├── charts.php              INR/target and weekly dose evolution charts
+    │   ├── new.php                 New anticoagulation control form (pre-filled from last final study)
+    │   ├── view.php                View / edit study, with Rosendaal TTR panel
+    │   ├── save.php                Hardened save handler with in_range and dose_change_pct calculations
+    │   ├── print.php               Printable / PDF report with TTR and attached documents
+    │   └── _form_fields.php        Shared form inputs
+    ├── hf_followup/
+    │   ├── charts.php              Weight, NYHA, natriuretic peptide, creatinine and potassium charts
+    │   ├── new.php                 New heart failure follow-up form (pre-filled from last final study)
+    │   ├── view.php                View / edit study with evolution charts
+    │   ├── save.php                Hardened save handler with nyha_numeric and weight_change_kg
+    │   ├── print.php               Printable / PDF report with attached documents
+    │   └── _form_fields.php        Shared form inputs
+    └── holter/
+        ├── charts.php              Heart rate, PVC burden, AF burden and pause charts
+        ├── new.php                 New Holter study form
+        ├── view.php                View / edit study with evolution charts
+        ├── save.php                Hardened save handler with pvc_burden_pct
+        ├── print.php               Printable / PDF report with attached documents
+        └── _form_fields.php        Shared form inputs
 ```
 
 ---
@@ -133,7 +159,7 @@ interface/forms/form_cardiology/
 ### 3.1 Fresh installation
 Run in order on the OpenEMR database:
 ```bash
-# 1. Base container + all 5 cards schema and list_options seeds
+# 1. Base container + all 8 cards schema and list_options seeds
 mysql -u <user> -p <database> < table.sql
 
 # 2. Spanish (Argentina) translations
@@ -151,6 +177,18 @@ mysql -u <user> -p <database> < lang_custom.sql
 ```
 > [!NOTE]
 > `sql/upgrade_001_new_cards.sql` is completely idempotent: it uses `CREATE TABLE IF NOT EXISTS` and `INSERT IGNORE`, making it safe to re-run without risking data loss or primary key conflicts.
+
+### 3.3 Upgrading an existing installation (`upgrade_004_cards_batch2.sql`)
+To add the batch-2 cards (`anticoag`, `hf_followup`, `holter`) to an installation that already has the container and previous cards, run:
+```bash
+# 1. Add anticoag, hf_followup and holter tables, modules and list_options
+mysql -u <user> -p <database> < sql/upgrade_004_cards_batch2.sql
+
+# 2. Update translations
+mysql -u <user> -p <database> < lang_custom.sql
+```
+> [!NOTE]
+> `sql/upgrade_004_cards_batch2.sql` is idempotent and only uses `CREATE TABLE IF NOT EXISTS` and `INSERT IGNORE`; it does not alter existing tables, lists or seeds. The same DDL and seeds are appended to `table.sql` for fresh installations.
 
 ---
 
@@ -188,7 +226,7 @@ mysql -u <user> -p <database> < lang_custom.sql
 
 ## 5. Clinical cards specification
 
-The module bundles 5 clinical cards designed to cover core cardiovascular outpatient workflows:
+The module bundles 8 clinical cards designed to cover core cardiovascular outpatient workflows:
 
 | Code | Title | Table | Key Features & Calculations | Finalize Requirement |
 |---|---|---|---|---|
@@ -197,6 +235,57 @@ The module bundles 5 clinical cards designed to cover core cardiovascular outpat
 | `ecg` | 12-Lead Electrocardiogram | `form_card_ecg` | Rhythm, conduction intervals (PR, QRS, QT), electrical axis, repolarization findings. Formulas: QTc Bazett = `QT / sqrt(60/HR)`, QTc Fridericia = `QT / cbrt(60/HR)`. Real-time calculation in `ecg.js`. | `conclusion` |
 | `preop_risk` | Preoperative Cardiovascular Risk | `form_card_preop_risk` | Lee Revised Cardiac Risk Index (RCRI) with 6 clinical predictors (high-risk surgery, ischemic heart disease, congestive heart failure, cerebrovascular disease, insulin-dependent diabetes, creatinine > 2.0 mg/dL). Calculates score 0–6 and Lee Class I–IV. Neutral risk assessment with no hardcoded event-rate percentages. Real-time calculation in `preop_risk.js`. | `recommendation` AND `conclusion` |
 | `fitness` | Cardiology Fitness Certificate | `form_card_fitness` | Anthropometry (weight, height, BSA, calculated BMI = `kg/m²`), cardiovascular exam, ECG/stress test summaries, fitness determination (`fit`, `fit_restrictions`, `unfit`, `temporary_unfit`), sports/activities, clinical restrictions (mandatory if `fit_restrictions`), validity date `valid_until` (pre-filled +12m, must exceed `study_date`). Certificate print renders neutral declaration: `"Based on the examination performed on <date>, the patient is considered <determination>."` and displays the physician's `state_license_number`. Real-time BMI calculation in `fitness.js`. | `determination`, `valid_until`, `conclusion`, and `restrictions` (if `fit_restrictions`) |
+| `anticoag` | Anticoagulation Monitoring | `form_card_anticoag` | Indication, vitamin K antagonist, INR sample type, measured INR and target range, weekly dose and calculated dose change, adherence, bleeding/thrombotic events, next control date. Calculated values: `in_range` (`in`, `below`, `above`) and `dose_change_pct = (new − current) / current × 100`. View and print also show Rosendaal TTR. | `inr_value`, target low/high, `next_control_date`, and `conclusion` |
+| `hf_followup` | Heart Failure Follow-up | `form_card_hf_followup` | NYHA class, HF type/etiology/stage, volume status and vitals, congestion findings, LVEF and laboratory values, guideline-directed therapy flags, hospitalizations/ER visits, education, plan. Calculated values: `nyha_numeric` (I–IV → 1–4) and `weight_change_kg` versus the previous final study. | `nyha_class` and `conclusion` |
+| `holter` | Holter Monitor Study | `form_card_holter` | Recording duration, total beats, minimum/mean/maximum heart rate and times, dominant rhythm (`card_ecg_rhythm`), AF and paced-beat burden, pauses, PVC/PAC counts, couplets, NSVT/SVT runs, ST episodes, AV block, symptoms and correlation, findings. Calculated value: `pvc_burden_pct = pvc_total / total_beats × 100`. | `recording_hours` and `conclusion` |
+
+### 5.1 Batch-2 card details
+
+All three cards follow the same workflow as the older cards: drafts are editable, final studies are read-only, every request is validated server-side, and no calculated value is ever read from `POST`.
+
+#### `anticoag` – Anticoagulation Monitoring
+
+- **Fields:** `study_date`, `indication`, `drug`, `sample_type`, `inr_value`, `target_inr_low`, `target_inr_high`, `in_range`, `current_weekly_dose_mg`, `new_weekly_dose_mg`, `dose_change_pct`, `dosing_schedule`, `missed_doses`, `bleeding_event`, `thrombotic_event`, `event_detail`, `adherence`, `interacting_factors`, `next_control_date`, `plan`, `conclusion`, `comments`.
+- **Lists:** `card_anticoag_indication`, `card_anticoag_drug`, `card_inr_sample`, `card_adherence`.
+- **Plausibility bounds:** INR `0.5–10`, target low `1.0–4.0`, target high `1.5–5.0` (and high must be greater than low), weekly doses `0–200 mg`.
+- **Calculated values:** `in_range` compares the INR with the target range (`below`, `in`, `above`). `dose_change_pct` is `(new − current) / current × 100` and stays `NULL` when the current dose is missing or zero.
+- **Finalize rules:** `inr_value`, both target bounds, `next_control_date`, and `conclusion` are required. The next control date must be strictly after the study date and no more than 365 days later. `event_detail` is required whenever `bleeding_event` or `thrombotic_event` is set.
+- **Prefill:** a new study copies `indication`, `drug`, `sample_type`, `target_inr_low`, `target_inr_high`, and `new_weekly_dose_mg` (as `current_weekly_dose_mg`) from the latest **final** study of the same patient.
+
+#### `hf_followup` – Heart Failure Follow-up
+
+- **Fields:** `study_date`, `nyha_class`, `nyha_numeric`, `hf_type`, `etiology`, `hf_stage`, `weight_kg`, `dry_weight_kg`, `weight_change_kg`, `heart_rate_bpm`, `bp_systolic_mmhg`, `bp_diastolic_mmhg`, `spo2_pct`, `edema`, `jugular_distension`, `rales`, `orthopnea`, `pnd`, `congestion_note`, `lvef_pct`, `lvef_date`, `nt_probnp_pg_ml`, `bnp_pg_ml`, `creatinine_mg_dl`, `potassium_mmol_l`, `sodium_mmol_l`, `adherence`, `on_raas_inhibitor`, `on_beta_blocker`, `on_mra`, `on_sglt2_inhibitor`, `on_loop_diuretic`, `medications_note`, `hospitalizations_since_last`, `er_visits_since_last`, `education_given`, `plan`, `next_control_date`, `conclusion`, `comments`.
+- **Lists:** `card_nyha`, `card_hf_type`, `card_hf_etiology`, `card_hf_stage`, `card_edema_grade`, `card_adherence`.
+- **Plausibility bounds:** weight/dry weight `20–300 kg`, heart rate `20–250`, systolic BP `40–300`, diastolic BP `20–200`, SpO₂ `50–100 %`, LVEF `5–90 %`, NT-proBNP `0–70000 pg/mL`, BNP `0–5000 pg/mL`, creatinine `0.1–15 mg/dL`, potassium `1.5–8 mmol/L`, sodium `100–170 mmol/L`, hospitalizations/ER visits `0–50`.
+- **Calculated values:** `nyha_numeric` maps the selected class (`i`–`iv`) to `1–4`. `weight_change_kg` is the current `weight_kg` minus the `weight_kg` of the previous **final** study of the same patient with `study_date` earlier than the current study (the current row is excluded when editing).
+- **Cross-field rules:** `lvef_date` cannot be in the future; an optional `next_control_date` must be after the study date.
+- **Finalize rules:** `nyha_class` and `conclusion` are required.
+- **Prefill:** a new study copies `hf_type`, `etiology`, `hf_stage`, `dry_weight_kg`, the five `on_*` therapy flags, and `medications_note` from the latest **final** study of the same patient.
+
+#### `holter` – Holter Monitor Study
+
+- **Fields:** `study_date`, `indication`, `recording_hours`, `total_beats`, `hr_min_bpm`, `hr_mean_bpm`, `hr_max_bpm`, `hr_min_time`, `hr_max_time`, `dominant_rhythm`, `af_present`, `af_burden_pct`, `paced_beats_pct`, `longest_pause_ms`, `pauses_gt_3s`, `pvc_total`, `pvc_burden_pct`, `pvc_couplets`, `nsvt_runs`, `longest_nsvt_beats`, `pac_total`, `svt_runs`, `longest_svt_beats`, `st_episodes`, `st_description`, `av_block_note`, `symptoms_reported`, `symptom_correlation`, `findings`, `conclusion`, `comments`.
+- **Lists:** `dominant_rhythm` uses the existing `card_ecg_rhythm` list; no new rhythm list is created.
+- **Plausibility bounds:** recording `1–168 h`, total beats `100–2000000`, HR min `20–200`, mean `30–220`, max `40–300`, burdens `0–100 %`, longest pause `0–30000 ms`, pauses > 3 s `0–1000`, PVC `0–500000`, couplets `0–100000`, NSVT runs `0–10000`, longest NSVT `0–1000 beats`, PAC `0–500000`, SVT runs `0–10000`, longest SVT `0–10000 beats`, ST episodes `0–1000`.
+- **Cross-field rules:** `pvc_total` cannot exceed `total_beats`; when all three are present, heart rates must satisfy `hr_min ≤ hr_mean ≤ hr_max`. Times accept `HH:MM` or `HH:MM:SS` and are stored as `HH:MM:SS`.
+- **Calculated value:** `pvc_burden_pct = pvc_total / total_beats × 100`.
+- **Finalize rules:** `recording_hours` and `conclusion` are required.
+
+### 5.2 Time in therapeutic range (TTR, Rosendaal method)
+
+`lib/CardAnticoag.php::ttr(int $pid, string $studyDate, int $windowDays = 180)` computes TTR for a patient:
+
+1. Select only **final**, active anticoagulation studies with a non-null INR, a valid target range (`high > low`), and `DATE(study_date)` inside the window ending on the reference study date (default 180 days). Results are ordered by `study_date ASC, id ASC`.
+2. Each consecutive pair of tests forms one interval. Intervals longer than **56 days** are skipped because linear interpolation is not considered reliable across such a gap.
+3. The **earlier test** of the interval supplies the target range for the whole interval.
+4. The INR is linearly interpolated between both tests and the fraction of the interval inside the target range is computed. TTR is `Σ(interval days × in-range fraction) / Σ(interval days) × 100`.
+5. The function returns `ttr_pct` (one decimal, or `null`), `days_evaluated`, `tests`, and `message`. With fewer than two usable tests (or no usable interval) `ttr_pct` is `null` and the translated message **“Not enough data”** is shown. `view.php` and `print.php` display both the percentage and the days evaluated.
+
+**Hand example:** final tests on 2026-01-01 (INR 2.0, target 2.0–3.0), 2026-01-11 (INR 3.0, target changes to 2.5–3.5), and 2026-02-10 (INR 1.0).
+
+- Interval 1 (2026-01-01 → 2026-01-11, 10 days) uses the earlier target 2.0–3.0. INR rises from 2.0 to 3.0, so it is inside the range for the whole interval: `10 × 1 = 10` in-range days.
+- Interval 2 (2026-01-11 → 2026-02-10, 30 days) still uses the earlier target 2.5–3.5. INR falls linearly from 3.0 to 1.0 and crosses 2.5 after a 0.5 drop out of the 2.0 total drop, i.e. one quarter of the interval, so it is in range for 7.5 of 30 days: `30 × 0.25 = 7.5` in-range days.
+- TTR = `(10 + 7.5) / (10 + 30) × 100 = 43.8 %` over **40 evaluated days**.
 
 ---
 
@@ -716,6 +805,48 @@ Run these steps on a test installation before deploying to production.
 - [ ] **OpenEMR 8.2.0 and 8.5.0:** repeat the single-PDF, partial-result, cancel, and Escape checks on both versions. Verify no version-number checks are used and the same code path runs.
 - [ ] **Escape and Close:** press Escape before uploading (dialog closes), during upload (upload is cancelled), and click both the header X and the bottom **Close** button. Verify the opener always removes its `message` listener.
 
+### 12.42 Anticoagulation: Draft, finalize and TTR
+- [ ] Open the **Anticoagulation Monitoring** card (`anticoag`) in an active encounter.
+- [ ] Enter INR `2.4`, target low `2.0`, target high `3.0`, current weekly dose `35`, new weekly dose `30`, and a conclusion. Click **Save draft**.
+- [ ] Verify the saved study is `draft`, `in_range = 'in'`, and `dose_change_pct = -14.29`.
+- [ ] Click **Finalize**. Verify the study becomes `final`, read-only, and the finalized user/timestamp are populated.
+- [ ] Verify `view.php` and `print.php` show the TTR percentage (or **Not enough data** when fewer than two usable final tests exist) and the days evaluated.
+- [ ] Attempt a direct POST to edit the finalized study. Verify the update is rejected with `This study is finalized and cannot be edited.`.
+- [ ] Click **Print**. Verify patient header, INR/target, dose, events, TTR, conclusion, and attached documents are rendered.
+
+### 12.43 Anticoagulation: Required and cross-field rejection
+- [ ] Finalize without an INR. Verify rejection with `An INR value is required to finalize the study.`.
+- [ ] Finalize with target low `3.0` and target high `2.5`. Verify rejection with `The upper target INR must be greater than the lower target INR.`.
+- [ ] Finalize without a next control date, then with the study date itself. Verify rejection with `A next control date is required to finalize the study.` and `The next control date must be after the study date.`.
+- [ ] Set the next control date to more than 365 days after the study date. Verify rejection with the 365-day message.
+- [ ] Check `Bleeding event` and leave `Event detail` empty. Verify rejection requiring the event detail.
+- [ ] Enter INR `0.4` (below `0.5`) and target low `0.9` (below `1.0`). Verify both are rejected as out of range.
+- [ ] Enter decimals with a comma (`2,4`, `2,0`, `3,0`) and verify they are accepted and stored as `2.40`, `2.00`, `3.00`.
+
+### 12.44 Heart Failure Follow-up: Calculations, finalize and prefill
+- [ ] Open the **Heart Failure Follow-up** card (`hf_followup`).
+- [ ] Set NYHA class `Class III`, weight `82.5 kg`, LVEF `30 %`, and a conclusion. Verify the calculated NYHA class number is `3`.
+- [ ] Save a first final study, then create a new study for the same patient with weight `80.0 kg`. Verify `weight_change_kg = -2.500` versus the previous final study.
+- [ ] Verify the new form is pre-filled with the previous final `hf_type`, `etiology`, `hf_stage`, `dry_weight_kg`, the five `on_*` flags, and `medications_note`.
+- [ ] Set `lvef_date` to tomorrow. Verify rejection with `The LVEF date cannot be in the future.`.
+- [ ] Set an optional next control date equal to or before the study date. Verify rejection with `The next control date must be after the study date.`.
+- [ ] Finalize without an NYHA class. Verify rejection with `An NYHA class is required to finalize the study.`.
+- [ ] Verify out-of-range values are rejected: weight `19` or `301`, heart rate `19`, systolic BP `39`, diastolic BP `19`, SpO₂ `49`, LVEF `4` or `91`, NT-proBNP `70001`, BNP `5001`, creatinine `0.09` or `16`, potassium `1.4` or `9`, sodium `99` or `171`, hospitalizations/ER visits `51`.
+- [ ] Verify comma decimals are accepted, the calculations are recomputed server-side (post a forged `nyha_numeric`/`weight_change_kg` and confirm it is ignored), and print shows the attached documents.
+- [ ] Finalize a study and attempt a direct POST edit; verify `This study is finalized and cannot be edited.`.
+
+### 12.45 Holter: Calculations, cross-field rules and prefill
+- [ ] Open the **Holter Monitor Study** card (`holter`).
+- [ ] Enter recording hours `24`, total beats `100000`, PVC `5000`, and a conclusion. Verify `pvc_burden_pct = 5.00`.
+- [ ] Set heart rates min `55`, mean `70`, max `120`. Verify the study saves.
+- [ ] Set min `80`, mean `70`, max `120`. Verify rejection with the heart-rate ordering message.
+- [ ] Set PVC `100001` with total beats `100000`. Verify rejection with `The PVC count cannot exceed the total beat count.`.
+- [ ] Finalize without recording hours. Verify rejection with `A recording duration is required to finalize the study.`.
+- [ ] Verify out-of-range values are rejected: recording `0` or `169`, total beats `99` or `2000001`, HR min `19`, mean `29`, max `39`, burdens `-1` or `101`, longest pause `30001`, pauses > 3 s `1001`, PVC `500001`, couplets `100001`, NSVT runs `10001`, longest NSVT `1001`, PAC `500001`, SVT runs `10001`, longest SVT `10001`, ST episodes `1001`.
+- [ ] Verify `dominant_rhythm` options come from the existing `card_ecg_rhythm` list and that `HH:MM` and `HH:MM:SS` times are both accepted and stored as `HH:MM:SS`.
+- [ ] Verify comma decimals are accepted, a forged `pvc_burden_pct` in POST is ignored, and charts render across multiple studies with missing/null values.
+- [ ] Finalize a study, attempt a direct POST edit, and verify rejection. Then click **Print** and verify patient header, rates, burdens, pauses, ectopy, conclusion, and attachments.
+
 ---
 
 ## 13. Document attachments architecture (`card_documents`)
@@ -758,7 +889,7 @@ Categories seeded under the OpenEMR root document category (ID `1`):
 ## 14. Reusable document upload dialog
 
 The Attached Documents section no longer contains an inline upload form. All
-five study views include `templates/_documents.php`, which opens the reusable
+eight study views include `templates/_documents.php`, which opens the reusable
 dialog implemented by `documents_upload.php` through the public `CardUpload`
 JavaScript API.
 
