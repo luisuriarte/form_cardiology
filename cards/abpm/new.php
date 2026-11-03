@@ -23,6 +23,7 @@ require_once($GLOBALS['srcdir'] . '/api.inc.php');
 require_once($GLOBALS['srcdir'] . '/forms.inc.php');
 
 use OpenEMR\Common\Acl\AclMain;
+use OpenEMR\Core\Header;
 use OpenEMR\Forms\Cardiology\CardiologyContainer;
 
 require_once(__DIR__ . '/../../lib/CardiologyContainer.php');

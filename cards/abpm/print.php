@@ -24,6 +24,13 @@ require_once(__DIR__ . '/../../lib/CardSettings.php');
 use OpenEMR\Common\Acl\AclMain;
 use OpenEMR\Forms\Cardiology\CardiologyContainer;
 
+// Logos for PDF generation
+$logo_dir = $GLOBALS['webroot'] . '/public/images/logos/cardiology';
+$logo_banner = $logo_dir . '/logo_banner.svg';
+$logo = $logo_dir . '/logo.svg';
+$logo_png = $logo_dir . '/logo.png';
+$logo_banner_png = $logo_dir . '/logo_banner.png';
+
 if (!AclMain::aclCheckCore('patients', 'med')) {
     die(xlt('Not authorized'));
 }

@@ -238,6 +238,8 @@ The module bundles 8 clinical cards designed to cover core cardiovascular outpat
 | `anticoag` | Anticoagulation Monitoring | `form_card_anticoag` | Indication, vitamin K antagonist, INR sample type, measured INR and target range, weekly dose and calculated dose change, adherence, bleeding/thrombotic events, next control date. Calculated values: `in_range` (`in`, `below`, `above`) and `dose_change_pct = (new − current) / current × 100`. View and print also show Rosendaal TTR. | `inr_value`, target low/high, `next_control_date`, and `conclusion` |
 | `hf_followup` | Heart Failure Follow-up | `form_card_hf_followup` | NYHA class, HF type/etiology/stage, volume status and vitals, congestion findings, LVEF and laboratory values, guideline-directed therapy flags, hospitalizations/ER visits, education, plan. Calculated values: `nyha_numeric` (I–IV → 1–4) and `weight_change_kg` versus the previous final study. | `nyha_class` and `conclusion` |
 | `holter` | Holter Monitor Study | `form_card_holter` | Recording duration, total beats, minimum/mean/maximum heart rate and times, dominant rhythm (`card_ecg_rhythm`), AF and paced-beat burden, pauses, PVC/PAC counts, couplets, NSVT/SVT runs, ST episodes, AV block, symptoms and correlation, findings. Calculated value: `pvc_burden_pct = pvc_total / total_beats × 100`. | `recording_hours` and `conclusion` |
+| `abpm` | Ambulatory Blood Pressure Monitoring | `form_card_abpm` | 24-h BP/HR recording (6–72 h), readings 1–500, office/24h/day/night/max/min BP+HR, `valid_pct`, pulse pressure and dip percentages, `card_dipping_pattern`, `card_abpm_classification`, calculated `pulse_pressure_24h`, `dip_sbp_pct`, `dip_dbp_pct`. Charts: `abpm_24h`, `abpm_day_night`, `abpm_dip`, `abpm_hr`. Finalize requires `recording_hours`, `readings_total`, `readings_valid`, `sbp_24h`, `dbp_24h`, `conclusion`. Prefill only `device_model`, `day_start_time`, `night_start_time`, `on_antihypertensives`, `medications_note` from latest FINAL same-patient ABPM. | `recording_hours`, `readings_total`, `readings_valid`, `sbp_24h`, `dbp_24h`, `conclusion` |
+| `chagas` | Chagas Disease Follow-up | `form_card_chagas` | Phase/epidemiology, optional three serology tests, two independent physician-selected classifications (Kuschnir/ABCD), ECG flags with `ecg_normal` mutually exclusive, chest X-ray/echo, HF/NYHA conditional, device, digestive conditional, etiologic treatment (drug/dates, no doses), public-health/family, plan. Stage disclaimer: “Stages are selected by the physician according to the consensus applied; the criteria are not evaluated by this form.” Charts: `chagas_lvef`, `chagas_lvedd`. Finalize requires `disease_phase`, `serology_status`, `conclusion`; chronic phases require at least one of `kuschnir_stage`/`abcd_stage`. Dates validated; `next_control_date` after study date; reported date required when reported. | `disease_phase`, `serology_status`, `conclusion` |
 
 ### 5.1 Batch-2 card details
 
@@ -271,6 +273,30 @@ All three cards follow the same workflow as the older cards: drafts are editable
 - **Calculated value:** `pvc_burden_pct = pvc_total / total_beats × 100`.
 - **Finalize rules:** `recording_hours` and `conclusion` are required.
 
+### 5.3 Batch-3 card details
+
+#### `abpm` – Ambulatory Blood Pressure Monitoring
+
+- **Fields:** `study_date`, `recording_hours`, `device_model`, `day_start_time`, `night_start_time`, `on_antihypertensives`, `medications_note`, `indication`, `total_readings`, `valid_readings`, `valid_pct`, `sbp_24h`, `dbp_24h`, `pulse_pressure_24h`, `dip_sbp_pct`, `dip_dbp_pct`, `card_dipping_pattern`, `card_abpm_classification`, `conclusion`, `office_sbp_mmhg`, `office_dbp_mmhg`, `office_hr_bpm`, `day_sbp_mmhg`, `day_dbp_mmhg`, `day_hr_bpm`, `night_sbp_mmhg`, `night_dbp_mmhg`, `night_hr_bpm`, `max_sbp_mmhg`, `max_dbp_mmhg`, `max_hr_bpm`, `min_sbp_mmhg`, `min_dbp_mmhg`, `min_hr_bpm`.
+- **Lists:** `card_dipping_pattern`, `card_abpm_classification`.
+- **Plausibility bounds:** recording `6–72 h`, readings `1–500`, valid readings `≤ total`, SBP > DBP per site, min ≤ mean/day/night ≤ max for SBP, DBP and HR, valid readings ≤ total readings.
+- **Calculated values:** `valid_pct = valid_readings / total_readings × 100` (hand-calculated with `number_format(..., 2, '.', '')`). `pulse_pressure_24h = sbp_24h - dbp_24h`. `dip_sbp_pct = (sbp_24h - daytime_sbp) / sbp_24h × 100`. `dip_dbp_pct = (dbp_24h - daytime_dbp) / dbp_24h × 100`.
+- **Cross-field ordering rules:** SBP > DBP per site; min ≤ mean/day/night ≤ max for SBP, DBP and HR; valid readings ≤ total readings.
+- **Finalize rules:** `recording_hours`, `readings_total`, `readings_valid`, `sbp_24h`, `dbp_24h`, and `conclusion` are required.
+- **Prefill:** only `device_model`, `day_start_time`, `night_start_time`, `on_antihypertensives`, and `medications_note` are copied from the latest **final** study of the same patient.
+- **Charts exactly:** `abpm_24h`, `abpm_day_night`, `abpm_dip`, `abpm_hr`.
+
+#### `chagas` – Chagas Disease Follow-up
+
+- **Fields:** `study_date`, `disease_phase`, `probable_transmission_route`, `country_or_region_of_origin`, `residence_in_endemic_area`, `epidemiological_history`, `serology_test_1`, `serology_test_type_1`, `serology_result_1`, `serology_date_1`, `serology_test_2`, `serology_test_type_2`, `serology_result_2`, `serology_date_2`, `serology_test_3`, `serology_test_type_3`, `serology_result_3`, `serology_date_3`, `overall_serology_status`, `stage_physician_selected`, `kuschnir_stage`, `abcd_stage`, `ecg_done`, `ecg_normal`, `ecg_rbbb`, `ecg_lafb`, `ecg_lpfb`, `ecg_av_block`, `ecg_q_waves`, `ecg_st_t_changes`, `ecg_low_voltage`, `ecg_arrhythmia`, `ecg_other`, `chest_xray_performed`, `chest_xray_date`, `cardiomegaly`, `chest_xray_findings`, `echocardiogram_performed`, `echocardiogram_date`, `lvef_pct`, `lvedd_mm`, `left_ventricular_aneurysm`, `left_ventricular_thrombus`, `wall_motion`, `heart_failure`, `nyha_class`, `digestive_involvement`, `megaesophagus`, `megacolon`, `chronic_constipation`, `digestive_findings`, `treatment_status`, `treatment_drug`, `treatment_start_date`, `treatment_end_date`, `treatment_note`, `mandatory_report`, `report_date`, `public_health_note`, `family_screening_done`, `family_screening_note`, `plan`, `conclusion`, `comments`.
+- **Lists:** `card_chagas_phase`, `card_chagas_transmission`, `card_chagas_serology_status`, `card_chagas_serology_test`, `card_chagas_serology_result`, `card_chagas_kuschnir`, `card_chagas_abcd`, `card_chagas_device`, `card_chagas_treatment_status`, `card_chagas_treatment_drug`, `card_nyha`, `card_wall_motion`.
+- **Plausibility bounds:** LVEF `5–90 %`, LVEDD `10–200 mm`, dates not in the future, treatment end date ≥ treatment start date.
+- **Cross-field rules:** NYHA class can only be recorded when heart failure is present; any digestive flag requires digestive involvement to be marked as present.
+- **Finalize rules:** `disease_phase`, `serology_status`, and `conclusion` are required. Chronic phases (identified by `disease_phase` options beginning with `chronic_`) require at least one of `kuschnir_stage` or `abcd_stage`. Result requires its type and type requires its result. Dates validated; `next_control_date` must be after study date. Reported date required when case is reported to public health.
+- **Prefill:** only `origin_area`, `endemic_residence`, `epidemiological_history`, `transmission_route`, three serology groups, `serology_status`, `treatment_status`, `treatment_drug`, treatment dates, `family_screening_done`, `family_screening_note`; never prefill stages or findings.
+- **Charts exactly:** `chagas_lvef`, `chagas_lvedd`.
+
+---
 ### 5.2 Time in therapeutic range (TTR, Rosendaal method)
 
 `lib/CardAnticoag.php::ttr(int $pid, string $studyDate, int $windowDays = 180)` computes TTR for a patient:
