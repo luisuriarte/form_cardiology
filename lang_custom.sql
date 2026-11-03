@@ -1,31 +1,33 @@
--- ============================================================================
--- lang_custom.sql  –  Formulario Cardiología (form_cardiology)
--- Español (Argentina) – lang_code = 'el'
---
--- Contiene las traducciones de todos los strings que aparecen en llamadas
--- xl() / xlt() / xla() / xlj() de los archivos PHP del módulo, más los
--- títulos de las listas (list_options) registradas en table.sql.
---
--- Compatibilidad: OpenEMR 8.2.0 – 8.5.0
--- Seguro de re-ejecutar: usa INSERT IGNORE / UPDATE solo cuando difiere.
--- ============================================================================
-
+-- =============================================================================
+-- lang_custom.sql  --  Cardiology form (form_cardiology)
+-- GENERATED FILE: do not edit by hand. Source: lang/es_AR.tsv
+-- Generator: php tools/build_lang_sql.php
+-- Language: Spanish (Latin American)
+-- Safe to run any number of times, on a fresh install or on an upgrade.
+-- RULE: an existing non-empty translation is NEVER overwritten.
+-- Run in ONE session:  mysql -u root -p <openemr_db> < lang_custom.sql
+-- =============================================================================
 START TRANSACTION;
 
--- ============================================================================
--- 1. Asegurar que el registro del idioma Español (Latinoamérica) exista
--- ============================================================================
--- La siguiente línea está comentada porque el registro ya existe en la mayoría
--- de las instalaciones de OpenEMR. Descomentarla sólo si es necesario.
--- INSERT IGNORE INTO lang_languages (lang_code, lang_description)
--- SELECT 'el', 'Spanish (Latin American)'
--- WHERE NOT EXISTS (SELECT 1 FROM lang_languages WHERE lang_code = 'el')
+SET @lang_desc := 'Spanish (Latin American)';
+SET @lang_id   := (SELECT lang_id   FROM lang_languages WHERE lang_description = @lang_desc LIMIT 1);
+SET @lang_code := (SELECT lang_code FROM lang_languages WHERE lang_description = @lang_desc LIMIT 1);
 
--- ============================================================================
--- 2. Insertar traducciones en lang_custom (INSERT IGNORE = no sobreescribe)
--- ============================================================================
-INSERT IGNORE INTO lang_custom (lang_description, lang_code, constant_name, definition) VALUES
+SELECT IF(@lang_id IS NULL,
+          'ERROR: language not found, nothing will be written',
+          CONCAT('Language found: ', @lang_code)) AS check_language;
 
+-- -----------------------------------------------------------------------------
+-- Strings of this module (loaded into a temporary table, nothing is written yet)
+-- -----------------------------------------------------------------------------
+DROP TEMPORARY TABLE IF EXISTS tmp_card_lang;
+CREATE TEMPORARY TABLE tmp_card_lang (
+  constant_name VARCHAR(500) NOT NULL,
+  definition    TEXT         NOT NULL,
+  PRIMARY KEY (constant_name)
+) DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO tmp_card_lang (constant_name, definition) VALUES
 -- --------------------------------------------------------------------------
 -- Título del formulario y navegación general
 -- --------------------------------------------------------------------------
@@ -1399,45 +1401,58 @@ INSERT IGNORE INTO lang_custom (lang_description, lang_code, constant_name, defi
 ('Spanish (Latin American)', 'el', 'Other drug',                                            'Otro fármaco')
 
 ;
-
--- ============================================================================
--- 3. Sincronizar lang_custom → lang_constants (agregar strings fuente faltantes)
--- ============================================================================
-INSERT IGNORE INTO lang_constants (constant_name)
-SELECT DISTINCT CONVERT(lc.constant_name USING utf8mb4)
-FROM lang_custom lc
-WHERE lc.constant_name <> ''
+-- A. Add the source constants that do not exist yet
+INSERT INTO lang_constants (constant_name)
+SELECT t.constant_name
+FROM tmp_card_lang t
+WHERE @lang_id IS NOT NULL
   AND NOT EXISTS (
     SELECT 1 FROM lang_constants c
-    WHERE c.constant_name = CONVERT(lc.constant_name USING utf8mb4)
+    WHERE c.constant_name = CONVERT(t.constant_name USING utf8mb4)
   );
 
--- ============================================================================
--- 4. Insertar definiciones nuevas (saltar si ya existe)
--- ============================================================================
-INSERT IGNORE INTO lang_definitions (cons_id, lang_id, definition)
-SELECT c.cons_id, l.lang_id, lc.definition
-FROM lang_custom lc
-INNER JOIN lang_constants c
-    ON c.constant_name = CONVERT(lc.constant_name USING utf8mb4)
-INNER JOIN lang_languages l
-    ON l.lang_code = lc.lang_code
-WHERE NOT EXISTS (
-    SELECT 1 FROM lang_definitions d
-    WHERE d.cons_id = c.cons_id AND d.lang_id = l.lang_id
-);
-
--- ============================================================================
--- 5. Actualizar definiciones que cambiaron desde la última ejecución
--- ============================================================================
+-- B. Fill definitions that exist but are EMPTY (a non-empty one is never touched)
 UPDATE lang_definitions d
 INNER JOIN lang_constants c ON c.cons_id = d.cons_id
-INNER JOIN lang_languages l ON l.lang_id = d.lang_id
-INNER JOIN lang_custom lc
-    ON l.lang_code = lc.lang_code
-    AND c.constant_name = CONVERT(lc.constant_name USING utf8mb4)
-SET d.definition = lc.definition
-WHERE IFNULL(d.definition, '') <> IFNULL(lc.definition, '');
+INNER JOIN tmp_card_lang t  ON c.constant_name = CONVERT(t.constant_name USING utf8mb4)
+SET d.definition = t.definition
+WHERE d.lang_id = @lang_id
+  AND IFNULL(d.definition, '') = '';
+
+-- C. Insert definitions for constants that have NO row for this language
+INSERT INTO lang_definitions (cons_id, lang_id, definition)
+SELECT c.cons_id, @lang_id, t.definition
+FROM tmp_card_lang t
+INNER JOIN lang_constants c ON c.constant_name = CONVERT(t.constant_name USING utf8mb4)
+WHERE @lang_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM lang_definitions d
+    WHERE d.cons_id = c.cons_id AND d.lang_id = @lang_id
+  );
+
+-- D. Record in lang_custom ONLY what ended up with OUR definition
+INSERT INTO lang_custom (lang_description, lang_code, constant_name, definition)
+SELECT @lang_desc, @lang_code, t.constant_name, t.definition
+FROM tmp_card_lang t
+INNER JOIN lang_constants c   ON c.constant_name = CONVERT(t.constant_name USING utf8mb4)
+INNER JOIN lang_definitions d ON d.cons_id = c.cons_id AND d.lang_id = @lang_id
+                              AND d.definition = t.definition
+WHERE @lang_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM lang_custom lc
+    WHERE lc.lang_code = @lang_code
+      AND lc.constant_name = CONVERT(t.constant_name USING utf8mb4)
+  );
+
+-- E. Report
+SELECT COUNT(*) AS strings_in_file FROM tmp_card_lang;
+
+SELECT t.constant_name, d.definition AS kept_definition, t.definition AS our_definition
+FROM tmp_card_lang t
+INNER JOIN lang_constants c   ON c.constant_name = CONVERT(t.constant_name USING utf8mb4)
+INNER JOIN lang_definitions d ON d.cons_id = c.cons_id AND d.lang_id = @lang_id
+WHERE IFNULL(d.definition, '') <> '' AND d.definition <> t.definition
+ORDER BY t.constant_name;
 
 COMMIT;
-
+DROP TEMPORARY TABLE IF EXISTS tmp_card_lang;
