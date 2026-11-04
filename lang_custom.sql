@@ -1182,7 +1182,27 @@ INSERT INTO tmp_card_lang (constant_name, definition) VALUES
 ('Not indicated', 'No indicado'),
 ('Benznidazole', 'Benznidazol'),
 ('Nifurtimox', 'Nifurtimox'),
-('Other drug', 'Otro fármaco');
+('Other drug', 'Otro fármaco'),
+('Upload Document', 'Subir Documento'),
+('Uploaded Documents', 'Documentos Subidos'),
+('1. Choose destination folder', '1. Elegir carpeta de destino'),
+('2. Select file', '2. Seleccionar archivo'),
+('Destination folder', 'Carpeta de destino'),
+('No folder selected', 'Sin carpeta seleccionada'),
+('Please select a destination folder first.', 'Seleccione primero una carpeta de destino.'),
+('No categories available.', 'No hay categorías disponibles.'),
+('No documents uploaded for this study.', 'No hay documentos subidos para este estudio.'),
+('Name', 'Nombre'),
+('Type', 'Tipo'),
+('Action', 'Acción'),
+('PDF', 'PDF'),
+('IMAGE', 'IMAGEN'),
+('DICOM', 'DICOM'),
+('OTHER', 'OTRO'),
+('Drag file here or', 'Arrastre el archivo aquí o'),
+('click to browse', 'haga clic para buscar'),
+('The selected folder is not part of the Cardiology document tree.', 'La carpeta seleccionada no pertenece al árbol de documentos de Cardiología.'),
+('The configured document category is not part of the Cardiology document tree. Run sql/upgrade_003_documents.sql and rebuild the category tree.', 'La categoría de documentos configurada no pertenece al árbol de documentos de Cardiología. Ejecute sql/upgrade_003_documents.sql y reconstruya el árbol de categorías.');
 
 -- A. Add the source constants that do not exist yet
 INSERT INTO lang_constants (constant_name)

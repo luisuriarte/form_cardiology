@@ -25,10 +25,12 @@ if (file_exists(__DIR__ . '/../../globals.php')) {
     require_once(__DIR__ . '/../../../globals.php');
 }
 
+use OpenEMR\Forms\Cardiology\CardDocumentCategories;
 use OpenEMR\Forms\Cardiology\CardDocuments;
 use OpenEMR\Forms\Cardiology\CardInput;
 use OpenEMR\Forms\Cardiology\CardiologyContainer;
 
+require_once __DIR__ . '/lib/CardDocumentCategories.php';
 require_once __DIR__ . '/lib/CardDocuments.php';
 require_once __DIR__ . '/lib/CardInput.php';
 require_once __DIR__ . '/lib/CardiologyContainer.php';
@@ -38,16 +40,23 @@ require_once __DIR__ . '/lib/CardiologyContainer.php';
  *
  * @param list<array{id:int,name:string,category_id:int,linked:bool}> $documents
  * @param list<array{name:string,message:string}>                    $errors
+ * @param list<array<string,mixed>>                                   $attachments
  */
-function cardiologyUploadRespond(string $status, array $documents = [], array $errors = [], int $httpStatus = 200): never
-{
+function cardiologyUploadRespond(
+    string $status,
+    array $documents = [],
+    array $errors = [],
+    int $httpStatus = 200,
+    array $attachments = []
+): never {
     http_response_code($httpStatus);
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([
-        'source'    => 'cardiology-upload',
-        'status'    => $status,
-        'documents' => $documents,
-        'errors'    => $errors,
+        'source'      => 'cardiology-upload',
+        'status'      => $status,
+        'documents'   => $documents,
+        'errors'      => $errors,
+        'attachments' => array_values($attachments),
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -67,6 +76,72 @@ function cardiologyUploadInt(string $key, ?int $default = null): ?int
     } catch (\InvalidArgumentException $e) {
         return null;
     }
+}
+
+/**
+ * Returns the display label and CSS class for a document MIME type.
+ *
+ * @return array{0:string,1:string}
+ */
+function cardiologyUploadMimeBadge(string $mime): array
+{
+    $mime = strtolower($mime);
+    if (str_contains($mime, 'pdf')) {
+        return ['PDF', 'cardiology-mime-pdf'];
+    }
+    if (str_contains($mime, 'image')) {
+        return [xlt('IMAGE'), 'cardiology-mime-image'];
+    }
+    if (str_contains($mime, 'dicom')) {
+        return ['DICOM', 'cardiology-mime-dicom'];
+    }
+
+    return [xlt('OTHER'), 'cardiology-mime-other'];
+}
+
+/**
+ * Renders the right-hand documents table body.
+ *
+ * @param list<array<string,mixed>> $attachments
+ */
+function cardiologyUploadRenderRows(array $attachments, string $retrieveBase): string
+{
+    if (empty($attachments)) {
+        return '<tr><td colspan="6" class="text-center text-muted fst-italic py-4">'
+            . text(xlt('No documents uploaded for this study.'))
+            . '</td></tr>';
+    }
+
+    $html = '';
+    foreach ($attachments as $att) {
+        $docId       = (int)($att['document_id'] ?? 0);
+        $docName     = (string)($att['doc_name'] ?? '');
+        $category    = (string)($att['category_name'] ?? '');
+        $docDate     = substr((string)($att['doc_date'] ?? $att['linked_at'] ?? ''), 0, 16);
+        $sizeBytes   = (int)($att['size'] ?? 0);
+        $mime        = (string)($att['mimetype'] ?? '');
+        $retrieveUrl = $retrieveBase . rawurlencode((string)$docId);
+
+        [$typeLabel, $typeClass] = cardiologyUploadMimeBadge($mime);
+
+        $html .= '<tr data-doc-id="' . attr((string)$docId) . '">'
+            . '<td class="text-break">' . text($docName) . '</td>'
+            . '<td><span class="text-secondary small">' . text(xl($category)) . '</span></td>'
+            . '<td><span class="cardiology-mime-badge ' . attr($typeClass) . '">' . text($typeLabel) . '</span></td>'
+            . '<td class="text-end small text-muted">' . text(CardDocuments::formatBytes($sizeBytes)) . '</td>'
+            . '<td class="text-center small text-muted">' . text($docDate !== '' ? $docDate : '—') . '</td>'
+            . '<td class="text-center">'
+            . '<a href="' . attr($retrieveUrl) . '" target="_blank" rel="noopener"'
+            . ' class="btn btn-sm btn-outline-primary"'
+            . ' title="' . xla('Open document') . '"'
+            . ' aria-label="' . xla('Open document') . '">'
+            . '<i class="fa fa-eye" aria-hidden="true"></i>'
+            . '</a>'
+            . '</td>'
+            . '</tr>';
+    }
+
+    return $html;
 }
 
 $isPost = (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST');
@@ -122,6 +197,7 @@ $studyId    = cardiologyUploadInt('study_id', null);
 $cardCode   = CardInput::text($_POST['card_code'] ?? $_GET['card_code'] ?? '') ?? '';
 $multiple   = cardiologyUploadInt('multiple', 1);
 $multiple   = ($multiple === 1) ? 1 : 0;
+$keepOpen   = (($_POST['keep_open'] ?? $_GET['keep_open'] ?? '') === '1');
 
 if (($_POST['category_id'] ?? $_GET['category_id'] ?? '') !== '' && $categoryId === null) {
     if ($isPost) {
@@ -243,13 +319,22 @@ if ($isPost) {
         }
     }
 
+    $attachments = [];
+    if ($context['card_code'] !== null && $context['study_id'] !== null) {
+        $attachments = CardDocuments::listForStudy(
+            (string)$context['card_code'],
+            (int)$context['study_id'],
+            $pid
+        );
+    }
+
     if (empty($documents)) {
-        cardiologyUploadRespond('error', [], $errors);
+        cardiologyUploadRespond('error', [], $errors, 200, $attachments);
     }
     if (!empty($errors)) {
-        cardiologyUploadRespond('partial', $documents, $errors);
+        cardiologyUploadRespond('partial', $documents, $errors, 200, $attachments);
     }
-    cardiologyUploadRespond('ok', $documents, []);
+    cardiologyUploadRespond('ok', $documents, [], 200, $attachments);
 }
 
 // GET: render the dialog.
@@ -262,17 +347,44 @@ $uploadUrl     = CardiologyContainer::getFormRootUrl() . '/documents_upload.php'
 $formRoot      = CardiologyContainer::getWebRootUrl();
 $uploadError   = $uploadError ?? '';
 $context       = $context ?? null;
-$config        = [
+$treeHtml      = CardDocumentCategories::renderTreeHtml();
+
+$defaultCategoryId   = 0;
+$defaultCategoryName = '';
+if ($context !== null) {
+    $candidate = (int)$context['category_id'];
+    if (CardDocumentCategories::isSelectable($candidate)) {
+        $defaultCategoryId   = $candidate;
+        $defaultCategoryName = CardDocumentCategories::getName($candidate);
+    }
+}
+
+$attachments = [];
+if ($context !== null && $context['card_code'] !== null && $context['study_id'] !== null) {
+    $attachments = CardDocuments::listForStudy(
+        (string)$context['card_code'],
+        (int)$context['study_id'],
+        $pid
+    );
+}
+
+$retrieveBase = $GLOBALS['webroot'] . '/controller.php?document&retrieve&patient_id='
+    . urlencode((string)$pid) . '&as_file=false&document_id=';
+
+$config = [
     'pid'            => $pid,
-    'categoryId'     => $context !== null ? (int)$context['category_id'] : 0,
+    'categoryId'     => $defaultCategoryId,
     'cardCode'       => $context !== null ? (string)($context['card_code'] ?? '') : '',
     'studyId'        => ($context !== null && $context['study_id'] !== null) ? (int)$context['study_id'] : null,
     'multiple'       => $multiple,
+    'keepOpen'       => $keepOpen,
     'csrfToken'      => $csrfToken,
     'maxUploadBytes' => $maxBytes,
     'maxFiles'       => $maxFiles,
     'allowedExts'    => array_values($allowedExts),
     'uploadUrl'      => $uploadUrl,
+    'retrieveBase'   => $retrieveBase,
+    'attachments'    => array_values($attachments),
 ];
 ?><!DOCTYPE html>
 <html lang="<?php echo attr($_SESSION['language_direction'] ?? 'ltr') === 'rtl' ? 'ar' : 'en'; ?>">
@@ -303,37 +415,99 @@ $config        = [
     <?php else : ?>
         <div id="cardiology-upload-alert" class="alert d-none" role="alert" aria-live="polite"></div>
 
-        <div id="cardiology-upload-dropzone"
-             class="cardiology-upload-dropzone mb-3"
-             role="button"
-             tabindex="0"
-             aria-label="<?php echo xla('Drag and drop files here or press Enter to choose files'); ?>">
-            <i class="fa fa-cloud-upload fa-2x text-primary mb-2" aria-hidden="true"></i>
-            <div class="font-weight-bold"><?php echo xlt('Drag and drop files here'); ?></div>
-            <div class="small text-muted"><?php echo xlt('or click to choose files'); ?></div>
+        <div class="row">
+            <div class="col-md-5 mb-3">
+                <div class="card cardiology-upload-panel h-100">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0"><?php echo xlt('Upload New Document'); ?></h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label font-weight-bold d-block" for="cardiology-tree">
+                                <?php echo xlt('1. Choose destination folder'); ?>
+                            </label>
+                            <div class="cardiology-tree-container" id="cardiology-tree" role="tree"
+                                 aria-label="<?php echo xla('Destination folder'); ?>">
+                                <?php echo $treeHtml; ?>
+                            </div>
+                            <div class="cardiology-selection-display text-muted<?php echo $defaultCategoryId > 0 ? ' has-selection' : ''; ?>"
+                                 id="cardiology-selection-display"
+                                 aria-live="polite">
+                                <?php if ($defaultCategoryId > 0) : ?>
+                                    <i class="fa fa-folder-open me-1" aria-hidden="true"></i>
+                                    <?php echo text($defaultCategoryName); ?>
+                                <?php else : ?>
+                                    <?php echo xlt('No folder selected'); ?>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label font-weight-bold d-block" for="cardiology-upload-input">
+                                <?php echo xlt('2. Select file'); ?>
+                            </label>
+                            <div id="cardiology-upload-dropzone"
+                                 class="cardiology-upload-dropzone"
+                                 role="button"
+                                 tabindex="0"
+                                 aria-label="<?php echo xla('Drag and drop files here or press Enter to choose files'); ?>">
+                                <input type="file"
+                                       id="cardiology-upload-input"
+                                       class="cardiology-upload-file-input"
+                                       name="files[]"
+                                       <?php echo $multiple === 1 ? 'multiple' : ''; ?>
+                                       accept="<?php echo attr('.' . implode(',.', $allowedExts)); ?>">
+                                <i class="fa fa-cloud-upload fa-2x text-primary mb-2" aria-hidden="true"></i>
+                                <div class="font-weight-bold">
+                                    <?php echo xlt('Drag file here or'); ?>
+                                    <span class="text-primary"><?php echo xlt('click to browse'); ?></span>
+                                </div>
+                                <small class="text-muted d-block mt-2">
+                                    <?php echo sprintf(
+                                        xlt('Allowed types: %s. Maximum size per file: %s. Maximum files per upload: %d.'),
+                                        text(strtoupper(implode(', ', $allowedExts))),
+                                        text($maxText),
+                                        $maxFiles
+                                    ); ?>
+                                </small>
+                                <div class="cardiology-upload-selected-file d-none" id="cardiology-upload-file-name"></div>
+                            </div>
+                        </div>
+
+                        <div id="cardiology-upload-queue" class="cardiology-upload-queue mb-3" aria-live="polite"></div>
+
+                        <div id="cardiology-upload-summary" class="d-none mb-3" aria-live="polite"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-7 mb-3">
+                <div class="card cardiology-upload-panel h-100">
+                    <div class="card-header">
+                        <h6 class="card-title mb-0"><?php echo xlt('Uploaded Documents'); ?></h6>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle mb-0" id="cardiology-upload-docs-table">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th scope="col"><?php echo xlt('Name'); ?></th>
+                                        <th scope="col"><?php echo xlt('Category'); ?></th>
+                                        <th scope="col"><?php echo xlt('Type'); ?></th>
+                                        <th scope="col" class="text-end"><?php echo xlt('Size'); ?></th>
+                                        <th scope="col" class="text-center"><?php echo xlt('Date'); ?></th>
+                                        <th scope="col" class="text-center"><?php echo xlt('Action'); ?></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cardiology-upload-docs-tbody">
+                                    <?php echo cardiologyUploadRenderRows($attachments, $retrieveBase); ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
-
-        <div class="form-group">
-            <label class="sr-only" for="cardiology-upload-input"><?php echo xlt('Select files'); ?></label>
-            <input type="file"
-                   id="cardiology-upload-input"
-                   class="form-control-file"
-                   name="files[]"
-                   <?php echo $multiple === 1 ? 'multiple' : ''; ?>
-                   accept="<?php echo attr('.' . implode(',.', $allowedExts)); ?>">
-            <small class="form-text text-muted">
-                <?php echo sprintf(
-                    xlt('Allowed types: %s. Maximum size per file: %s. Maximum files per upload: %d.'),
-                    text(strtoupper(implode(', ', $allowedExts))),
-                    text($maxText),
-                    $maxFiles
-                ); ?>
-            </small>
-        </div>
-
-        <div id="cardiology-upload-queue" class="cardiology-upload-queue mb-3" aria-live="polite"></div>
-
-        <div id="cardiology-upload-summary" class="d-none mb-3" aria-live="polite"></div>
 
         <div class="d-flex flex-wrap justify-content-between">
             <div>
@@ -360,7 +534,15 @@ $config        = [
 <script>
 window.CARD_UPLOAD_CONFIG = <?php echo json_encode($config, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE); ?>;
 window.CARD_UPLOAD_I18N = {
-    noDocuments: <?php echo json_encode(xl('No documents attached to this study.')); ?>,
+    noDocuments: <?php echo json_encode(xl('No documents uploaded for this study.')); ?>,
+    open: <?php echo json_encode(xl('Open')); ?>,
+    openTitle: <?php echo json_encode(xla('Open document')); ?>,
+    typePdf: <?php echo json_encode(xl('PDF')); ?>,
+    typeImage: <?php echo json_encode(xl('IMAGE')); ?>,
+    typeDicom: <?php echo json_encode(xl('DICOM')); ?>,
+    typeOther: <?php echo json_encode(xl('OTHER')); ?>,
+    noFolderSelected: <?php echo json_encode(xl('No folder selected')); ?>,
+    selectFolderFirst: <?php echo json_encode(xl('Please select a destination folder first.')); ?>,
     pending: <?php echo json_encode(xl('Pending')); ?>,
     uploading: <?php echo json_encode(xl('Uploading')); ?>,
     uploaded: <?php echo json_encode(xl('Uploaded')); ?>,

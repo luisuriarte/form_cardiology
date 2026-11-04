@@ -986,9 +986,10 @@ templates/_documents.php  →  js/cardiology-upload.js  →  documents_upload.ph
 
 | Archivo | Responsabilidad |
 |---|---|
-| `documents_upload.php` | GET renderiza el diálogo; POST valida y almacena archivos y devuelve el JSON documentado. |
-| `js/cardiology-upload.js` | API pública `CardUpload.open()`, alojamiento con `dlgopen()` o modal Bootstrap, validación de origen/fuente, limpieza del listener, `onDone`/`onClose`/`callBack`. |
-| `js/cardiology-upload-dialog.js` | Arrastrar y soltar, selector de archivos, cola, quitar antes de subir, progreso XHR por archivo, reintento, cancelación, resumen, Escape/Cerrar. |
+| `documents_upload.php` | GET renderiza el diálogo de dos columnas (árbol de carpetas + carpeta seleccionada + zona de arrastre, tabla de documentos); POST valida y almacena archivos y devuelve el JSON documentado. |
+| `lib/CardDocumentCategories.php` | Resuelve la raíz de Cardiología por nombre, recorre el subárbol por `parent`, valida pertenencia/selección y renderiza el árbol de carpetas. |
+| `js/cardiology-upload.js` | API pública `CardUpload.open()`, alojamiento con `dlgopen()` o modal Bootstrap, validación de origen/fuente, limpieza del listener, `keepOpen`, `onDone`/`onClose`/`callBack`. |
+| `js/cardiology-upload-dialog.js` | Selección en el árbol de carpetas, arrastrar y soltar, selector de archivos, cola, quitar antes de subir, progreso XHR por archivo, reintento, cancelación, resumen, tabla de documentos en vivo, Escape/Cerrar. |
 | `lib/CardDocuments.php` | `resolveUploadContext()`, `validateCategoryId()` y el único camino de almacenamiento `storeUploadedFile()`. |
 | `documents_api.php` | Sólo acciones que no suben archivos: `list`, `attach_existing`, `unlink`, `list_candidates`. |
 
@@ -999,10 +1000,11 @@ templates/_documents.php  →  js/cardiology-upload.js  →  documents_upload.ph
 | Popup `window.open()` de 1000×600 | Modal `dlgopen()` o modal iframe Bootstrap 4/5 | Conserva el marco nativo de OpenEMR, el apilado, el redimensionado y el tema. |
 | Un único input fijo `odon_doc` | Cola con varios archivos (límite del servidor, máximo 10) | Los adjuntos suelen llegar en varios archivos. |
 | POST de formulario que recarga el opener | `XMLHttpRequest` + JSON + `postMessage` | Evita perder el estado de la página y permite progreso, reintento y resultados parciales. |
+| Recarga de página tras cada subida | El diálogo permanece abierto (`keepOpen`) y ambas tablas se actualizan en vivo | El usuario puede adjuntar varios lotes al mismo estudio sin reabrir el diálogo. |
 | Sin progreso por archivo | Barra de progreso y estado por archivo | Necesario para PDF grandes y redes clínicas lentas. |
 | Sin reintento | Reintento sólo de archivos fallidos | Nunca se suben dos veces los archivos exitosos. |
 | Sin control de cancelación | Cancelar aborta la solicitud activa | Evita subidas prolongadas si el usuario cambia de opinión. |
-| Árbol de categorías libre en el diálogo | Parámetro `category_id` o categoría del módulo/fallback | La API valida categoría y ACL en el servidor, no en el navegador. |
+| Árbol de categorías libre en el diálogo | Mismo árbol de dos columnas, restringido al subárbol de Cardiología y resuelto por nombre (sin ID raíz fijo) | El usuario elige la carpeta destino como en el odontograma, mientras el servidor sigue validando pertenencia al subárbol y ACL. |
 | Sin token CSRF | CSRF en cada POST | Obligatorio para solicitudes que cambian estado. |
 | Validación sólo en la página | Lista de extensiones, MIME real, doble extensión, tamaño y validación de paciente/categoría/estudio | El navegador sólo aconseja; el servidor es la autoridad. |
 | `Document::createDocument()` y `UPDATE documents` directos | Un único método `CardDocuments::storeUploadedFile()` | Misma lógica para subidas sueltas, en borrador y en finalizado. |
@@ -1015,10 +1017,11 @@ templates/_documents.php  →  js/cardiology-upload.js  →  documents_upload.ph
 | Parámetro | Obligatorio | Validación |
 |---|---|---|
 | `pid` | Sí | Debe coincidir con `CardiologyContainer::getSessionPid()`. |
-| `category_id` | No | Debe existir en `categories`; su `aco_spec` se valida con ACL del núcleo. Si se omite, se usa la categoría del módulo o la 22007. |
+| `category_id` | No | Debe existir en `categories`, pertenecer al subárbol de Cardiología (raíz resuelta por nombre) y ser seleccionable; su `aco_spec` se valida con ACL del núcleo. Si se omite, se usa la categoría del módulo o la 22007. |
 | `card_code` | En par | Debe enviarse junto con `study_id`. |
 | `study_id` | En par | Debe pertenecer a `pid`, estar activo y pasar `CardRegistry::canWrite()`. |
 | `multiple` | No | `1` (predeterminado) o `0`. |
+| `keep_open` | No | `1` mantiene el modal abierto después de cada lote para subir más archivos; `0` lo cierra tras el primer resultado. |
 
 `GET` devuelve el HTML del diálogo. `POST` acepta `multipart/form-data`:
 
@@ -1027,7 +1030,7 @@ templates/_documents.php  →  js/cardiology-upload.js  →  documents_upload.ph
 | `csrf_token_form` | Sí | También se acepta `X-CSRF-Token`. |
 | `pid` | Sí | Misma validación de sesión que en GET. |
 | `files[]` | Sí | Uno o más archivos, máximo `CardDocuments::MAX_FILES_PER_REQUEST` (10). |
-| `category_id`, `card_code`, `study_id`, `multiple` | No | Misma validación que en GET. |
+| `category_id`, `card_code`, `study_id`, `multiple`, `keep_open` | No | Misma validación que en GET. |
 
 La respuesta del POST es siempre JSON:
 
@@ -1043,9 +1046,26 @@ La respuesta del POST es siempre JSON:
       "linked": true
     }
   ],
-  "errors": []
+  "errors": [],
+  "attachments": [
+    {
+      "link_id": 88,
+      "document_id": 1234,
+      "doc_name": "informe-ecocardiograma.pdf",
+      "category_name": "Echocardiogram",
+      "mimetype": "application/pdf",
+      "size": 482113,
+      "doc_date": "2026-11-04 09:14:00",
+      "linked_at": "2026-11-04 10:02:11"
+    }
+  ]
 }
 ```
+
+`attachments` es la lista actualizada del estudio (`CardDocuments::listForStudy()`),
+de modo que el diálogo y el opener pueden repintar sus tablas sin otra solicitud.
+Es un arreglo vacío cuando la subida es independiente (no se enviaron
+`card_code` + `study_id`).
 
 `status` puede ser:
 
@@ -1061,25 +1081,44 @@ No se acepta del request ningún nombre de función callback, fragmento de JavaS
 
 ### 16.4 Contrato `postMessage`
 
-Tras completar un lote, el diálogo envía exactamente (automáticamente si todos los archivos se subieron correctamente, o cuando el usuario cierra el diálogo tras un resultado parcial o con errores):
+Con `keepOpen` el diálogo publica cada lote finalizado, incluso si algunos
+archivos fallaron, y permanece abierto para que el usuario reintente sin perder
+el informe:
 
 ```js
 window.parent.postMessage({
   source: 'cardiology-upload',
   status: 'ok' | 'partial' | 'error',
+  keepOpen: true | false,
   documents: [{ id, name, category_id, linked }],
-  errors: [{ name, message }]
+  errors: [{ name, message }],
+  attachments: [ /* lista actualizada del estudio */ ]
+}, window.location.origin);
+```
+
+Cuando el usuario pulsa **Cancelar**, **Cerrar** o **Escape** (incluso para
+cerrar un diálogo en modo `keepOpen`), el diálogo envía una solicitud de cierre
+dedicada para que los modales iframe se cierren aunque el opener no tenga un
+`dlgclose()` global:
+
+```js
+window.parent.postMessage({
+  source: 'cardiology-upload',
+  action: 'close'
 }, window.location.origin);
 ```
 
 El receptor debe validar `event.origin` (igual a `window.location.origin`) y
-`event.source` (la ventana del iframe del diálogo). `CardUpload.open()` lo hace
-y además soporta un callback del lado del opener:
+`event.source` (la ventana del iframe del diálogo). `CardUpload.open()` lo hace,
+gestiona la solicitud de cierre y además soporta un callback del lado del opener:
 
 ```js
 function alCambiar(payload) {
   if (!payload || !payload.documents) return;
   console.log(payload.documents.length, payload.errors.length);
+  if (payload.attachments) {
+    // repintar la tabla de adjuntos local
+  }
 }
 
 CardUpload.open({
@@ -1087,6 +1126,7 @@ CardUpload.open({
   cardCode: 'echo',
   studyId: 7,
   multiple: 1,
+  keepOpen: true,
   callBack: 'alCambiar',
   onDone: alCambiar,
   onClose: function () { /* se ejecuta al quitar el diálogo */ }

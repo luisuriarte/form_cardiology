@@ -23,6 +23,7 @@ require_once __DIR__ . '/CardRegistry.php';
 require_once __DIR__ . '/CardiologyContainer.php';
 require_once __DIR__ . '/CardAudit.php';
 require_once __DIR__ . '/CardInput.php';
+require_once __DIR__ . '/CardDocumentCategories.php';
 
 use OpenEMR\Common\Acl\AclMain;
 use OpenEMR\Common\Database\QueryUtils;
@@ -248,11 +249,17 @@ final class CardDocuments
             if (!$category || (int)$category['id'] !== $categoryId) {
                 throw new \InvalidArgumentException(xlt('Invalid document category.'));
             }
+            if (!CardDocumentCategories::isSelectable($categoryId)) {
+                throw new \InvalidArgumentException(xlt('The selected folder is not part of the Cardiology document tree.'));
+            }
             self::assertCategoryAcl((string)($category['aco_spec'] ?? ''));
             return $categoryId;
         }
 
         $resolved = self::getCategoryId($cardCode ?? '');
+        if (!CardDocumentCategories::isSelectable($resolved)) {
+            throw new \RuntimeException(xlt('The configured document category is not part of the Cardiology document tree. Run sql/upgrade_003_documents.sql and rebuild the category tree.'));
+        }
         $category = sqlQuery('SELECT aco_spec FROM `categories` WHERE id = ? LIMIT 1', [$resolved]);
         self::assertCategoryAcl((string)($category['aco_spec'] ?? ''));
 

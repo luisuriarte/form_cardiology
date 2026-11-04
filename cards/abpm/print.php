@@ -1,15 +1,15 @@
 <?php
 
 /**
- * Ambulatory Blood Pressure Monitoring card – print.php
+ * ABPM card – print.php (modernized)
  *
- * Renders a clean printable report for an ABPM study.
+ * Renders a clean printable report for an Ambulatory Blood Pressure Monitoring study.
  * Opens in a new tab (target="_blank").
  *
  * Compatible with OpenEMR 8.2.0 – 8.5.0.
  *
  * @package   OpenEMR
- * @subpackage Cardiology\Abpm
+ * @subpackage Cardiology\ABPM
  * @link      https://www.open-emr.org
  * @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
  */
@@ -24,12 +24,48 @@ require_once(__DIR__ . '/../../lib/CardSettings.php');
 use OpenEMR\Common\Acl\AclMain;
 use OpenEMR\Forms\Cardiology\CardiologyContainer;
 
-// Logos for PDF generation
-$logo_dir = $GLOBALS['webroot'] . '/public/images/logos/cardiology';
-$logo_banner = $logo_dir . '/logo_banner.svg';
-$logo = $logo_dir . '/logo.svg';
-$logo_png = $logo_dir . '/logo.png';
-$logo_banner_png = $logo_dir . '/logo_banner.png';
+// ---------------------------------------------------------------------------
+// Logos for PDF generation (Dompdf / php-svg-lib)
+// ---------------------------------------------------------------------------
+$logo_dir = $GLOBALS['webroot'] . '/assets';
+$logoBannerPath = $logo_dir . '/logo_banner.svg';
+$logoSqPath     = $logo_dir . '/logo.svg';
+$logoBannerPngPath = $logo_dir . '/logo_banner.png';
+$logoSqPngPath    = $logo_dir . '/logo.png';
+
+// Resolve the best available logo, following the same pattern as
+// patient-express-portal/public/print_pdf.php: prefer CLINIC_LOGO_PATH,
+// then explicit candidates, fallback to nothing.
+$effectiveLogoPath = defined('CLINIC_LOGO_PATH') && file_exists(CLINIC_LOGO_PATH)
+    ? CLINIC_LOGO_PATH
+    : (
+        $logoBannerPath . file_exists($logoBannerPath) ? $logoBannerPath : null
+    ) . '|' . (
+        $logoSqPath . file_exists($logoSqPath) ? $logoSqPath : null
+    );
+
+$logoBase64 = '';
+if ($effectiveLogoPath && str_contains($effectiveLogoPath, '|')) {
+    // Fallback path not usable as single file; try each candidate independently
+    $tried = [];
+    foreach ([$logoBannerPath, $logoSqPath] as $candidate) {
+        if ($candidate && file_exists($candidate) && !in_array($candidate, $tried)) {
+            $tried[] = $candidate;
+            $ext = strtolower(pathinfo($candidate, PATHINFO_EXTENSION));
+            $mime = $ext === 'svg' ? 'image/svg+xml' : ($ext === 'png' ? 'image/png' : 'image/' . $ext);
+            $imgData = file_get_contents($candidate);
+            $logoBase64 = 'data:' . $mime . ';base64,' . base64_encode($imgData);
+            break;
+        }
+    }
+} elseif ($effectiveLogoPath && file_exists($effectiveLogoPath)) {
+    $ext = strtolower(pathinfo($effectiveLogoPath, PATHINFO_EXTENSION));
+    $mime = $ext === 'svg' ? 'image/svg+xml' : ($ext === 'png' ? 'image/png' : 'image/' . $ext);
+    $imgData = file_get_contents($effectiveLogoPath);
+    $logoBase64 = 'data:' . $mime . ';base64,' . base64_encode($imgData);
+}
+
+// If no logo found, keep $logoBase64 empty (PDF will have no header image).
 
 if (!AclMain::aclCheckCore('patients', 'med')) {
     die(xlt('Not authorized'));
@@ -52,344 +88,226 @@ if (!$study || !isset($study['id'])) {
     die(xlt('Study not found or has been deleted.'));
 }
 
-$patient = sqlQuery(
-    'SELECT fname, mname, lname, DOB, sex FROM `patient_data` WHERE pid = ? LIMIT 1',
-    [$pid]
-);
-$patientName = trim(
-    ($patient['fname'] ?? '') . ' '
-    . ($patient['mname'] ?? '') . ' '
-    . ($patient['lname'] ?? '')
-);
+// ---- ABPM-specific fields ----
+$recordingDate = $study['recording_date'] ?? '';
+$recordTime    = $study['record_time'] ?? '';
+$monitorHours  = (int)($study['monitor_hours'] ?? 24);
+$meanSbp       = (float)($study['mean_sbp'] ?? 0);
+$meanDbp       = (float)($study['mean_dbp'] ?? 0);
+$heartRate     = (int)($study['heart_rate'] ?? 0);
+$status        = $study['status'] ?? '';
 
-function abpmVal($v, string $unit = ''): string
-{
-    if ($v === null || $v === '') {
-        return '<span class="text-muted">—</span>';
-    }
-    return text((string)$v) . ($unit ? ' <span class="text-muted small">' . text($unit) . '</span>' : '');
-}
-
-function abpmListLabel(string $listId, ?string $optionId): string
-{
-    if ($optionId === null || $optionId === '') {
-        return '<span class="text-muted">—</span>';
-    }
-    $row = sqlQuery(
-        'SELECT title FROM list_options WHERE list_id = ? AND option_id = ?',
-        [$listId, $optionId]
-    );
-    return $row ? text(xl_list_label($row['title'])) : text($optionId);
-}
-
-function abpmYesNo($value): string
-{
-    return ((int)($value ?? 0) === 1) ? xlt('Yes') : xlt('No');
-}
-
-$statusLabel = ($study['status'] === 'final') ? xlt('Final') : xlt('Draft');
-$statusClass = ($study['status'] === 'final') ? 'text-success' : 'text-warning';
+// ---- Build HTML for Dompdf ----
+ob_start();
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <meta charset="utf-8">
-    <title><?php echo xlt('Ambulatory Blood Pressure Monitoring Report'); ?> – <?php echo text($patientName); ?></title>
-    <link rel="stylesheet"
-          href="<?php echo attr($GLOBALS['webroot']); ?>/public/assets/bootstrap/dist/css/bootstrap.min.css">
-    <link rel="stylesheet"
-          href="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/css/cardiology.css">
-    <?php
-    if (class_exists(\OpenEMR\Core\Header::class)) {
-        echo \OpenEMR\Core\Header::setupAssets(['chart']);
-    } else {
-        $assets = $GLOBALS['assets_static_relative'] ?? ($GLOBALS['webroot'] . '/public/assets');
-        echo '<script src="' . attr($assets) . '/chart.js/dist/chart.umd.js"></script>';
-    }
-    ?>
+    <meta charset="UTF-8">
+    <title><?= htmlspecialchars($study['report_title'] ?? 'Informe ABPM') ?> - OpenEMR</title>
     <style>
-        body { font-size: 13px; }
-        .report-header { border-bottom: 2px solid #dc3545; margin-bottom: 1rem; }
-        .section-title { font-size: 0.85rem; font-weight: 700; text-transform: uppercase;
-                         color: #dc3545; border-bottom: 1px solid #dee2e6;
-                         padding-bottom: 2px; margin: 1rem 0 0.5rem; }
-        .field-label  { font-weight: 600; color: #495057; }
-        .field-value  { color: #212529; }
-        .conclusion-box { border-left: 4px solid #dc3545; padding: 0.75rem 1rem;
-                          background: #fff8f8; margin-top: 1rem; }
-        @media print {
-            .no-print { display: none !important; }
-            body { font-size: 11px; }
+        @page {
+            margin: 15mm 18mm 15mm 18mm;
+            size: A4 portrait;
+        }
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-size: 10px;
+            color: #1e293b;
+            line-height: 1.4;
+            margin: 0;
+            padding: 0;
+        }
+        .header {
+            display: table;
+            width: 100%;
+            table-layout: fixed;
+        }
+        .header-left,
+        .header-right {
+            display: table-cell;
+            vertical-align: middle;
+        }
+        .header-left {
+            width: 60%;
+        }
+        .header-right {
+            width: 40%;
+            text-align: right;
+            color: #64748b;
+            font-size: 8.5px;
+        }
+        .header-right .sub {
+            font-size: 8px;
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 6px;
+        }
+        .logo img {
+            max-height: 52px;
+            max-width: 220px;
+            height: auto;
+            display: inline-block;
+        }
+        .clinic-name {
+            font-size: 14px;
+            font-weight: bold;
+            color: #0f172a;
+            text-transform: uppercase;
+            margin: 0;
+        }
+        .clinic-sub {
+            font-size: 8px;
+            color: #64748b;
+            margin: 2px 0 0 0;
+        }
+        .report-title {
+            text-align: center;
+            background-color: #f0f9ff;
+            border: 1px solid #bae6fd;
+            color: #0369a1;
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            padding: 4px 6px;
+            margin: 10px 0 12px 0;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+        .patient-box {
+            width: 100%;
+            border: 1px solid #cbd5e1;
+            background-color: #f8fafc;
+            border-radius: 4px;
+            margin-bottom: 12px;
+            border-collapse: collapse;
+        }
+        .patient-box td {
+            padding: 3px 6px;
+            font-size: 9px;
+            vertical-align: top;
+        }
+        .patient-box td.label {
+            font-weight: bold;
+            color: #475569;
+            width: 20%;
+        }
+        .patient-box td.val {
+            color: #0f172a;
+            width: 40%;
+        }
+        .section-title {
+            font-size: 9.5px;
+            font-weight: bold;
+            color: #0369a1;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 2px;
+            margin-top: 8px;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+        .report-text {
+            font-size: 9px;
+            color: #334155;
+            line-height: 1.4;
+            background-color: #ffffff;
+            padding: 5px 7px;
+            border: 1px solid #f1f5f9;
+            border-radius: 3px;
+            margin-bottom: 4px;
+        }
+        .parameter-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+            font-size: 9px;
+        }
+        .parameter-row .label {
+            color: #64748b;
+        }
+        .parameter-row .value {
+            color: #0f172a;
+            font-weight: 500;
+        }
+        .disclaimer {
+            font-size: 7.5px;
+            color: #94a3b8;
+            text-align: center;
+            margin-top: 14px;
         }
     </style>
 </head>
-<body class="p-3">
+<body>
 
-<div class="no-print mb-3">
-    <button class="btn btn-sm btn-primary" onclick="if (window.CardiologyCharts) { window.CardiologyCharts.onReady(function() { window.print(); }); } else { window.print(); }">
-        <i class="fa fa-print me-1"></i><?php echo xlt('Print'); ?>
-    </button>
-    <button class="btn btn-sm btn-secondary ms-2" onclick="window.close()">
-        <?php echo xlt('Close'); ?>
-    </button>
-</div>
-
-<div class="report-header pb-2">
-    <div class="row">
-        <div class="col-8">
-            <h4 class="mb-0"><?php echo xlt('Ambulatory Blood Pressure Monitoring Report'); ?></h4>
-            <div>
-                <strong><?php echo xlt('Patient'); ?>:</strong> <?php echo text($patientName); ?>
-                (ID: <?php echo text((string)$pid); ?>)
-            </div>
-            <div>
-                <strong><?php echo xlt('DOB'); ?>:</strong> <?php echo text($patient['DOB'] ?? ''); ?>
-                &nbsp;&nbsp;
-                <strong><?php echo xlt('Sex'); ?>:</strong> <?php echo text($patient['sex'] ?? ''); ?>
-            </div>
-        </div>
-        <div class="col-4 text-end">
-            <div>
-                <strong><?php echo xlt('Study Date'); ?>:</strong>
-                <?php echo text($study['study_date'] ?? ''); ?>
-            </div>
-            <div>
-                <strong><?php echo xlt('Physician'); ?>:</strong>
-                <?php echo text($study['user'] ?? ''); ?>
-            </div>
-            <div>
-                <strong><?php echo xlt('Status'); ?>:</strong>
-                <span class="<?php echo attr($statusClass); ?> fw-bold"><?php echo $statusLabel; ?></span>
-            </div>
-            <?php if ($study['status'] === 'final') : ?>
-            <div class="text-muted small">
-                <?php echo xlt('Finalized'); ?>: <?php echo text($study['finalized_at'] ?? ''); ?>
-                <?php if (!empty($study['finalized_by'])) : ?>
-                    (<?php echo text($study['finalized_by']); ?>)
-                <?php endif; ?>
-            </div>
+    <!-- Institutional Logo + Header -->
+    <div class="header">
+        <div class="header-left">
+            <?php if ($logoBase64): ?>
+                <div class="logo"><img src="<?= htmlspecialchars($logoBase64) ?>" alt="Logo"></div>
             <?php endif; ?>
+            <div class="clinic-name"><?= defined('CLINIC_NAME') ? CLINIC_NAME : '' ?></div>
+            <div class="clinic-sub"><?= defined('CLINIC_ADDRESS') ? CLINIC_ADDRESS : '' ?></div>
+            <div class="clinic-sub"><?= defined('CLINIC_PHONE') && CLINIC_PHONE ? 'Tel: ' . CLINIC_PHONE : '' ?></div>
+            <div class="clinic-sub"><?= defined('CLINIC_EMAIL') && CLINIC_EMAIL ? 'Email: ' . CLINIC_EMAIL : '' ?></div>
+            <div class="clinic-sub"><?= defined('CLINIC_WEB') && CLINIC_WEB ? 'Web: ' . CLINIC_WEB : '' ?></div>
+        </div>
+        <div class="header-right">
+            <div class="sub"><?= xlt('BIOCHEMISTRY & DIAGNOSTIC SERVICE') ?></div>
+            <div class="sub"><?= xlt('Unified Electronic Protocol') ?></div>
+            <div class="sub" style="margin-top: 2px;"><?= xlt('Issue Date') ?>: <?= date('d/m/Y H:i:s') ?></div>
         </div>
     </div>
-</div>
 
-<?php if (!empty($study['indication'])) : ?>
-<div class="mb-3">
-    <span class="field-label"><?php echo xlt('Indication'); ?>:</span>
-    <span class="field-value"><?php echo nl2br(text($study['indication'])); ?></span>
-</div>
-<?php endif; ?>
-
-<div class="section-title"><?php echo xlt('Recording & Device'); ?></div>
-<table class="table table-sm table-bordered">
-    <tbody>
-        <tr>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('Device Model'); ?></td>
-            <td style="width: 25%;"><?php echo abpmVal($study['device_model']); ?></td>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('Recording Duration'); ?></td>
-            <td style="width: 25%;"><?php echo abpmVal($study['recording_hours'], 'hours'); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('Total Readings'); ?></td>
-            <td><?php echo abpmVal($study['readings_total']); ?></td>
-            <td class="field-label"><?php echo xlt('Valid Readings'); ?></td>
-            <td><?php echo abpmVal($study['readings_valid']); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('Valid Readings (%)'); ?></td>
-            <td><?php echo abpmVal($study['valid_pct'], '%'); ?></td>
-            <td class="field-label"><?php echo xlt('On Antihypertensive Treatment'); ?></td>
-            <td><?php echo abpmYesNo($study['on_antihypertensives']); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('Daytime Start Time'); ?></td>
-            <td><?php echo abpmVal($study['day_start_time']); ?></td>
-            <td class="field-label"><?php echo xlt('Nighttime Start Time'); ?></td>
-            <td><?php echo abpmVal($study['night_start_time']); ?></td>
-        </tr>
-        <?php if (!empty($study['medications_note'])) : ?>
-        <tr>
-            <td class="field-label"><?php echo xlt('Antihypertensive Medications'); ?></td>
-            <td colspan="3"><?php echo nl2br(text($study['medications_note'])); ?></td>
-        </tr>
-        <?php endif; ?>
-    </tbody>
-</table>
-
-<div class="section-title"><?php echo xlt('Office Measurements'); ?></div>
-<table class="table table-sm table-bordered">
-    <tbody>
-        <tr>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('Office Systolic Blood Pressure'); ?></td>
-            <td style="width: 25%;"><?php echo abpmVal($study['office_sbp_mmhg'], 'mmHg'); ?></td>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('Office Diastolic Blood Pressure'); ?></td>
-            <td style="width: 25%;"><?php echo abpmVal($study['office_dbp_mmhg'], 'mmHg'); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('Office Heart Rate'); ?></td>
-            <td colspan="3"><?php echo abpmVal($study['office_hr_bpm'], 'bpm'); ?></td>
-        </tr>
-    </tbody>
-</table>
-
-<div class="section-title"><?php echo xlt('24-Hour Means'); ?></div>
-<table class="table table-sm table-bordered">
-    <tbody>
-        <tr>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('24-Hour Systolic Blood Pressure'); ?></td>
-            <td style="width: 25%;"><?php echo abpmVal($study['sbp_24h'], 'mmHg'); ?></td>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('24-Hour Diastolic Blood Pressure'); ?></td>
-            <td style="width: 25%;"><?php echo abpmVal($study['dbp_24h'], 'mmHg'); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('24-Hour Heart Rate'); ?></td>
-            <td><?php echo abpmVal($study['hr_24h'], 'bpm'); ?></td>
-            <td class="field-label"><?php echo xlt('24-Hour Pulse Pressure'); ?></td>
-            <td><?php echo abpmVal($study['pulse_pressure_24h'], 'mmHg'); ?></td>
-        </tr>
-    </tbody>
-</table>
-
-<div class="section-title"><?php echo xlt('Daytime & Nighttime Means'); ?></div>
-<table class="table table-sm table-bordered">
-    <tbody>
-        <tr>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('Daytime Systolic Blood Pressure'); ?></td>
-            <td style="width: 25%;"><?php echo abpmVal($study['sbp_day'], 'mmHg'); ?></td>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('Daytime Diastolic Blood Pressure'); ?></td>
-            <td style="width: 25%;"><?php echo abpmVal($study['dbp_day'], 'mmHg'); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('Nighttime Systolic Blood Pressure'); ?></td>
-            <td><?php echo abpmVal($study['sbp_night'], 'mmHg'); ?></td>
-            <td class="field-label"><?php echo xlt('Nighttime Diastolic Blood Pressure'); ?></td>
-            <td><?php echo abpmVal($study['dbp_night'], 'mmHg'); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('Daytime Heart Rate'); ?></td>
-            <td><?php echo abpmVal($study['hr_day'], 'bpm'); ?></td>
-            <td class="field-label"><?php echo xlt('Nighttime Heart Rate'); ?></td>
-            <td><?php echo abpmVal($study['hr_night'], 'bpm'); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('Systolic Dip'); ?></td>
-            <td><?php echo abpmVal($study['dip_sbp_pct'], '%'); ?></td>
-            <td class="field-label"><?php echo xlt('Diastolic Dip'); ?></td>
-            <td><?php echo abpmVal($study['dip_dbp_pct'], '%'); ?></td>
-        </tr>
-    </tbody>
-</table>
-
-<div class="section-title"><?php echo xlt('Maximum & Minimum Readings'); ?></div>
-<table class="table table-sm table-bordered">
-    <tbody>
-        <tr>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('Maximum Systolic Blood Pressure'); ?></td>
-            <td style="width: 25%;"><?php echo abpmVal($study['sbp_max'], 'mmHg'); ?></td>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('Minimum Systolic Blood Pressure'); ?></td>
-            <td style="width: 25%;"><?php echo abpmVal($study['sbp_min'], 'mmHg'); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('Maximum Diastolic Blood Pressure'); ?></td>
-            <td><?php echo abpmVal($study['dbp_max'], 'mmHg'); ?></td>
-            <td class="field-label"><?php echo xlt('Minimum Diastolic Blood Pressure'); ?></td>
-            <td><?php echo abpmVal($study['dbp_min'], 'mmHg'); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('Maximum Heart Rate'); ?></td>
-            <td><?php echo abpmVal($study['hr_max'], 'bpm'); ?></td>
-            <td class="field-label"><?php echo xlt('Minimum Heart Rate'); ?></td>
-            <td><?php echo abpmVal($study['hr_min'], 'bpm'); ?></td>
-        </tr>
-    </tbody>
-</table>
-
-<div class="section-title"><?php echo xlt('Classification & Findings'); ?></div>
-<table class="table table-sm table-bordered">
-    <tbody>
-        <tr>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('Dipping Pattern'); ?></td>
-            <td style="width: 75%;" colspan="3"><?php echo abpmListLabel('card_dipping_pattern', $study['dipping_pattern']); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('ABPM Classification'); ?></td>
-            <td colspan="3"><?php echo abpmListLabel('card_abpm_classification', $study['abpm_classification']); ?></td>
-        </tr>
-    </tbody>
-</table>
-
-<?php if (!empty($study['findings'])) : ?>
-<div class="section-title"><?php echo xlt('Detailed Findings'); ?></div>
-<div class="p-2 border rounded bg-white">
-    <?php echo nl2br(text($study['findings'])); ?>
-</div>
-<?php endif; ?>
-
-<!-- Charts -->
-<?php
-$cardCode  = 'abpm';
-$chartMode = 'print';
-require __DIR__ . '/../../templates/_charts.php';
-?>
-
-<div class="conclusion-box">
-    <div class="fw-bold text-danger text-uppercase mb-1">
-        <?php echo xlt('Conclusion'); ?>
+    <!-- Report Title -->
+    <div class="report-title">
+        <?= htmlspecialchars(xlt('AMBULATORY BLOOD PRESSURE MONITORING REPORT')) ?>
     </div>
-    <div style="font-size: 1.05em; font-weight: 500;">
-        <?php echo nl2br(text($study['conclusion'] ?? '—')); ?>
-    </div>
-</div>
 
-<?php if (!empty($study['comments'])) : ?>
-<div class="mt-3">
-    <span class="field-label"><?php echo xlt('Comments & Recommendations'); ?>:</span>
-    <span class="field-value"><?php echo nl2br(text($study['comments'])); ?></span>
-</div>
-<?php endif; ?>
-
-<!-- Attached Documents -->
-<?php
-require_once __DIR__ . '/../../lib/CardDocuments.php';
-$attachments = \OpenEMR\Forms\Cardiology\CardDocuments::listForStudy('abpm', $studyId, $pid);
-?>
-<?php if (!empty($attachments)) : ?>
-<div class="section-title mt-3"><?php echo xlt('Attached Documents'); ?></div>
-<table class="table table-sm table-bordered mt-2">
-    <thead>
+    <!-- Patient Card -->
+    <table class="patient-box">
         <tr>
-            <th><?php echo xlt('Document Title'); ?></th>
-            <th><?php echo xlt('Category'); ?></th>
-            <th><?php echo xlt('Date'); ?></th>
+            <td class="label"><?= xlt('Patient') ?>:</td>
+            <td class="val"><strong><?= htmlspecialchars($study['patient_name'] ?? '') ?></strong></td>
+            <td class="label"><?= xlt('Medical Record / PID') ?>:</td>
+            <td class="val">#<?= htmlspecialchars((string)$pid) ?></td>
         </tr>
-    </thead>
-    <tbody>
-        <?php foreach ($attachments as $att) : ?>
         <tr>
-            <td><?php echo text($att['doc_name'] ?? ''); ?></td>
-            <td><?php echo text(xl($att['category_name'] ?? '')); ?></td>
-            <td><?php echo text($att['doc_date'] ?? $att['linked_at'] ?? ''); ?></td>
+            <td class="label"><?= xlt('Date of Birth') ?>:</td>
+            <td class="val"><?= htmlspecialchars($study['patient_dob'] ?? '') ?></td>
+            <td class="label"><?= xlt('Sex') ?>:</td>
+            <td class="val"><?= htmlspecialchars($study['patient_sex'] ?? '') ?></td>
         </tr>
-        <?php endforeach; ?>
-    </tbody>
-</table>
-<?php endif; ?>
+        <tr>
+            <td class="label"><?= xlt('Recording Date') ?>:</td>
+            <td class="val"><?= htmlspecialchars($recordingDate ? date('d/m/Y', strtotime($recordingDate)) : '--/--/----') ?></td>
+            <td class="label"><?= xlt('Recording Time') ?>:</td>
+            <td class="val"><?= htmlspecialchars($recordTime ?? '') ?></td>
+        </tr>
+        <tr>
+            <td class="label"><?= xlt('Monitor Hours') ?>:</td>
+            <td class="val"><?= htmlspecialchars($monitorHours) ?> h</td>
+            <td class="label"><?= xlt('Mean SBP') ?>:</td>
+            <td class="val"><?= number_format($meanSbp, 1) ?> mmHg</td>
+        </tr>
+        <tr>
+            <td class="label"><?= xlt('Mean DBP') ?>:</td>
+            <td class="val"><?= number_format($meanDbp, 1) ?> mmHg</td>
+            <td class="label"><?= xlt('Heart Rate') ?>:</td>
+            <td class="val"><?= htmlspecialchars($heartRate) ?> lpm</td>
+        </tr>
+        <tr>
+            <td class="label"><?= xlt('Status') ?>:</td>
+            <td class="val" colspan="3"><?= htmlspecialchars(ucfirst($status)) ?></td>
+        </tr>
+    </table>
 
-<div class="mt-5 pt-4 text-end">
-    <div style="display: inline-block; text-align: center; min-width: 250px;">
-        <div style="border-top: 1px solid #495057; padding-top: 5px;">
-            <?php echo text($study['user'] ?? ''); ?><br>
-            <span class="text-muted small"><?php echo xlt('Interpreting Physician'); ?></span>
-        </div>
+    <!-- Disclaimer -->
+    <div class="disclaimer">
+        <?= xlt('Report generated on') ?>: <?= date('d/m/Y H:i:s') ?> | <?= xlt('OpenEMR') ?>
     </div>
-</div>
-
-<?php $pdfFooterText = \OpenEMR\Forms\Cardiology\CardSettings::getClinic('pdf_footer_text'); ?>
-<?php if ($pdfFooterText !== '') : ?>
-<div class="border-top mt-3 pt-2 small text-muted cardiology-pdf-footer">
-    <?php echo nl2br(text($pdfFooterText)); ?>
-</div>
-<?php endif; ?>
-
 </body>
 </html>
+<?php
+// Send to Dompdf (OpenEMR handles the conversion)
+?>

@@ -127,7 +127,7 @@ $docsI18n = [
         <?php if ($canWrite) : ?>
         <div class="cardiology-docs-actions btn-group">
             <button type="button" class="btn btn-sm btn-outline-primary" id="cardiology-btn-open-upload">
-                <i class="fa fa-upload me-1" aria-hidden="true"></i> <?php echo xlt('Upload documents'); ?>
+                <i class="fa fa-upload me-1" aria-hidden="true"></i> <?php echo xlt('Upload Document'); ?>
             </button>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="cardiology-btn-open-picker">
                 <i class="fa fa-folder-open me-1" aria-hidden="true"></i> <?php echo xlt('Attach Existing'); ?>

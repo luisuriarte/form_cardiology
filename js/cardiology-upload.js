@@ -106,17 +106,27 @@
         ref.hidden = true;
 
         ref.hosts.forEach(function (host) {
+            var node = null;
             try {
-                if (host.jQuery) {
-                    host.jQuery('#' + ref.winname).modal('hide');
+                node = host.document.getElementById(ref.winname);
+            } catch (e) {
+                return;
+            }
+            if (!node) {
+                // dlgopen() mounts the modal on window.top; the form iframe
+                // hosting this call must not stop the search.
+                return;
+            }
+            try {
+                if (host.jQuery && typeof host.jQuery.fn.modal === 'function') {
+                    host.jQuery(node).modal('hide');
                     return;
                 }
             } catch (e) {
                 // ignore
             }
             try {
-                var node = host.document.getElementById(ref.winname);
-                if (node && host.bootstrap && host.bootstrap.Modal) {
+                if (host.bootstrap && host.bootstrap.Modal) {
                     var instance = host.bootstrap.Modal.getInstance(node);
                     if (instance) {
                         instance.hide();
@@ -130,6 +140,18 @@
 
     function closeRef(ref) {
         hideDialog(ref);
+        if (ref.popup) {
+            // Native window.open() fallback: the dialog only asks the opener to
+            // close it, so the opener must dispose the actual popup window.
+            try {
+                if (!ref.popup.closed) {
+                    ref.popup.close();
+                }
+            } catch (e) {
+                // ignore cross-origin close failures
+            }
+            ref.popup = null;
+        }
         if (ref.fallbackContainer && ref.fallbackContainer.parentNode) {
             var container = ref.fallbackContainer;
             // Let Bootstrap finish its hide transition and backdrop cleanup
@@ -188,6 +210,7 @@
      * @param {string} [options.cardCode]
      * @param {number} [options.studyId]
      * @param {number} [options.multiple=1]
+     * @param {boolean} [options.keepOpen=false]
      * @param {function} [options.onDone]
      * @param {function} [options.onClose]
      * @param {function|string} [options.callBack]
@@ -223,6 +246,7 @@
 
         var cardCode = String(options.cardCode || '').trim();
         var multiple = (typeof options.multiple === 'undefined' || options.multiple) ? 1 : 0;
+        var keepOpen = options.keepOpen === true || options.keepOpen === 1 || options.keepOpen === '1';
         var title = options.title || ((typeof window.xl === 'function') ? window.xl('Upload Documents') : 'Upload Documents');
 
         var params = ['pid=' + encodeURIComponent(pid)];
@@ -236,6 +260,7 @@
             params.push('study_id=' + encodeURIComponent(studyId));
         }
         params.push('multiple=' + encodeURIComponent(multiple));
+        params.push('keep_open=' + (keepOpen ? '1' : '0'));
 
         var url = options.url ? String(options.url) : (formRoot() + '/interface/forms/form_cardiology/documents_upload.php');
         if (!/^https?:\/\//i.test(url) && url.charAt(0) !== '/') {
@@ -262,6 +287,7 @@
             closed: false,
             onDone: typeof options.onDone === 'function' ? options.onDone : null,
             onClose: typeof options.onClose === 'function' ? options.onClose : null,
+            keepOpen: keepOpen,
             callBack: options.callBack || null,
             fallbackContainer: null,
             frameWindow: null,
@@ -291,6 +317,15 @@
 
             var payload = event.data;
 
+            // The dialog asks the opener to close it (Cancel/Close/Escape, and
+            // the end of a keepOpen batch). This keeps fallback iframe modals in
+            // sync without relying on a global dlgclose() helper.
+            if (payload.action === 'close') {
+                closeRef(ref);
+                finalize(ref, null);
+                return;
+            }
+
             if (ref.onDone) {
                 try {
                     ref.onDone(payload);
@@ -299,6 +334,15 @@
                 }
             }
             invokeCallback(ref.callBack, payload);
+
+            // keepOpen: the dialog stays mounted so the user can upload more
+            // batches while the opener refreshes its own table live.
+            var shouldKeepOpen = ref.keepOpen
+                || (payload && (payload.keepOpen === true || payload.keepOpen === 1 || payload.keepOpen === '1'));
+            if (shouldKeepOpen) {
+                return;
+            }
+
             closeRef(ref);
             finalize(ref, payload);
         };

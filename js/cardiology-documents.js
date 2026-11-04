@@ -222,7 +222,9 @@
             const documents = payload.documents || [];
             const errors = payload.errors || [];
 
-            if (documents.length > 0) {
+            if (Array.isArray(payload.attachments)) {
+                renderAttachments(payload.attachments);
+            } else if (documents.length > 0) {
                 refreshAttachments();
             }
 
@@ -253,6 +255,7 @@
                     cardCode: cardCode,
                     studyId: studyId,
                     multiple: 1,
+                    keepOpen: true,
                     url: uploadUrl,
                     onDone: handleUploadDone
                 });

@@ -929,9 +929,10 @@ templates/_documents.php  →  js/cardiology-upload.js  →  documents_upload.ph
 
 | File | Responsibility |
 |---|---|
-| `documents_upload.php` | GET renders the dialog; POST validates and stores files, returning the documented JSON result. |
-| `js/cardiology-upload.js` | Public `CardUpload.open()` API, `dlgopen()`/Bootstrap modal hosting, origin/source checks, listener cleanup, `onDone`/`onClose`/`callBack`. |
-| `js/cardiology-upload-dialog.js` | Drag/drop, file picker, queue, remove-before-upload, per-file XHR progress, retry, cancel, summary, Escape/Close. |
+| `documents_upload.php` | GET renders the two-column dialog (folder tree + selected folder + drop zone, documents table); POST validates and stores files, returning the documented JSON result. |
+| `lib/CardDocumentCategories.php` | Resolves the Cardiology root by name, traverses the subtree by `parent`, validates membership/selectability, and renders the folder tree. |
+| `js/cardiology-upload.js` | Public `CardUpload.open()` API, `dlgopen()`/Bootstrap modal hosting, origin/source checks, listener cleanup, `keepOpen`, `onDone`/`onClose`/`callBack`. |
+| `js/cardiology-upload-dialog.js` | Folder tree selection, drag/drop, file picker, queue, remove-before-upload, per-file XHR progress, retry, cancel, summary, live documents table, Escape/Close. |
 | `lib/CardDocuments.php` | `resolveUploadContext()`, `validateCategoryId()`, and the single `storeUploadedFile()` path. |
 | `documents_api.php` | Non-upload actions only: `list`, `attach_existing`, `unlink`, `list_candidates`. |
 
@@ -945,10 +946,11 @@ intentional and required by this contract:
 | `window.open()` popup sized 1000×600 | `dlgopen()` modal, or a Bootstrap 4/5 iframe modal fallback | Keeps OpenEMR's native dialog chrome, stacking, resize, and theme. |
 | Single fixed `odon_doc` input | Queue with multiple files (server limit, maximum 10) | Attachments commonly arrive as several files. |
 | Normal form POST that reloads the opener | `XMLHttpRequest` + JSON + `postMessage` | Avoids losing page state and allows progress, retry, and partial results. |
+| Page reload after each upload | Dialog stays mounted (`keepOpen`) and both tables refresh live | Users can attach several batches to the same study without reopening the dialog. |
 | No per-file progress | Per-file upload progress bar and status | Required for large PDFs and slow clinical networks. |
 | No retry | Retry failed files only | Successful files are never uploaded twice. |
 | No cancel control | Cancel aborts the active request | Prevents long-running uploads when the user changes their mind. |
-| Free category tree in the dialog | `category_id` parameter or the card/fallback category | The API owns category validation and ACL, not the browser. |
+| Free category tree in the dialog | Same two-column tree, restricted to the Cardiology subtree and resolved by name (no hardcoded root ID) | Users pick the destination folder like in the odontogram, while the server still enforces subtree membership and ACL. |
 | No CSRF token | CSRF checked on every POST | Mandatory for state-changing requests. |
 | Validation only in the page | Extension allowlist, real MIME check, double-extension check, size limit, patient/category/study checks | Browser checks are advisory; the server is authoritative. |
 | Direct `Document::createDocument()` plus `UPDATE documents` | One `CardDocuments::storeUploadedFile()` method | Same logic for standalone, draft, and final uploads. |
@@ -961,10 +963,11 @@ intentional and required by this contract:
 | Parameter | Required | Validation |
 |---|---|---|
 | `pid` | Yes | Must equal `CardiologyContainer::getSessionPid()`. |
-| `category_id` | No | Must exist in `categories`; the category `aco_spec` is checked with core ACL. When omitted, the card category or fallback `22007` is used. |
+| `category_id` | No | Must exist in `categories`, belong to the Cardiology subtree (root resolved by name), and be selectable; the category `aco_spec` is checked with core ACL. When omitted, the card category or fallback `22007` is used. |
 | `card_code` | Pair | Must be supplied together with `study_id`. |
 | `study_id` | Pair | Must belong to `pid`, be active, and pass `CardRegistry::canWrite()`. |
 | `multiple` | No | `1` (default) or `0`. |
+| `keep_open` | No | `1` keeps the modal mounted after each batch so the user can upload more files; `0` closes it after the first result. |
 
 `GET` returns the HTML dialog page. `POST` accepts `multipart/form-data`:
 
@@ -973,7 +976,7 @@ intentional and required by this contract:
 | `csrf_token_form` | Yes | Also accepted as `X-CSRF-Token`. |
 | `pid` | Yes | Same session check as GET. |
 | `files[]` | Yes | One or more files, maximum `CardDocuments::MAX_FILES_PER_REQUEST` (10). |
-| `category_id`, `card_code`, `study_id`, `multiple` | No | Same validation as GET. |
+| `category_id`, `card_code`, `study_id`, `multiple`, `keep_open` | No | Same validation as GET. |
 
 The POST response is always JSON:
 
@@ -989,9 +992,26 @@ The POST response is always JSON:
       "linked": true
     }
   ],
-  "errors": []
+  "errors": [],
+  "attachments": [
+    {
+      "link_id": 88,
+      "document_id": 1234,
+      "doc_name": "echocardiogram-report.pdf",
+      "category_name": "Echocardiogram",
+      "mimetype": "application/pdf",
+      "size": 482113,
+      "doc_date": "2026-11-04 09:14:00",
+      "linked_at": "2026-11-04 10:02:11"
+    }
+  ]
 }
 ```
+
+`attachments` is the refreshed list for the study (`CardDocuments::listForStudy()`),
+so the dialog and the opener can repaint their tables without another request.
+It is an empty array when the upload is standalone (`card_code` + `study_id`
+were not supplied).
 
 `status` is one of:
 
@@ -1011,26 +1031,42 @@ foreign-reference identifier is accepted from the request.
 
 ### 14.4 `postMessage` contract
 
-After a completed batch the dialog sends exactly (automatically on full success,
-or when the user closes the dialog after a partial/error result):
+With `keepOpen` the dialog posts every finished batch, even when some files
+failed, and stays mounted so the user can retry without losing the report:
 
 ```js
 window.parent.postMessage({
   source: 'cardiology-upload',
   status: 'ok' | 'partial' | 'error',
+  keepOpen: true | false,
   documents: [{ id, name, category_id, linked }],
-  errors: [{ name, message }]
+  errors: [{ name, message }],
+  attachments: [ /* refreshed list for the study */ ]
+}, window.location.origin);
+```
+
+When the user presses **Cancel**, **Close** or **Escape** (including to dismiss a
+`keepOpen` dialog), the dialog sends a dedicated close request so iframe modals
+close even when the opener has no global `dlgclose()`:
+
+```js
+window.parent.postMessage({
+  source: 'cardiology-upload',
+  action: 'close'
 }, window.location.origin);
 ```
 
 The receiver must check both `event.origin` (exact `window.location.origin`) and
-`event.source` (the dialog iframe content window). `CardUpload.open()` does this
-and also supports an opener-side callback:
+`event.source` (the dialog iframe content window). `CardUpload.open()` does this,
+handles the close request, and also supports an opener-side callback:
 
 ```js
 function onChange(payload) {
   if (!payload || !payload.documents) return;
   console.log(payload.documents.length, payload.errors.length);
+  if (payload.attachments) {
+    // repaint the local attachments table
+  }
 }
 
 CardUpload.open({
@@ -1038,6 +1074,7 @@ CardUpload.open({
   cardCode: 'echo',
   studyId: 7,
   multiple: 1,
+  keepOpen: true,
   callBack: 'onChange',
   onDone: onChange,
   onClose: function () { /* runs after the dialog is removed */ }

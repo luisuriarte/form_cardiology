@@ -1,15 +1,15 @@
 <?php
 
 /**
- * Heart Failure Follow-up card – print.php
+ * Heart Failure Follow-up card – print.php (modernized)
  *
- * Renders a clean printable report for a heart failure follow-up study.
+ * Renders a clean printable report for a Heart Failure Follow-up study.
  * Opens in a new tab (target="_blank").
  *
  * Compatible with OpenEMR 8.2.0 – 8.5.0.
  *
  * @package   OpenEMR
- * @subpackage Cardiology\HfFollowup
+ * @subpackage Cardiology\Hf_Followup
  * @link      https://www.open-emr.org
  * @license   https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
  */
@@ -23,6 +23,49 @@ require_once(__DIR__ . '/../../lib/CardSettings.php');
 
 use OpenEMR\Common\Acl\AclMain;
 use OpenEMR\Forms\Cardiology\CardiologyContainer;
+
+// ---------------------------------------------------------------------------
+// Logos for PDF generation (Dompdf / php-svg-lib)
+// ---------------------------------------------------------------------------
+$logo_dir = $GLOBALS['webroot'] . '/assets';
+$logoBannerPath = $logo_dir . '/logo_banner.svg';
+$logoSqPath     = $logo_dir . '/logo.svg';
+$logoBannerPngPath = $logo_dir . '/logo_banner.png';
+$logoSqPngPath    = $logo_dir . '/logo.png';
+
+// Resolve the best available logo, following the same pattern as
+// patient-express-portal/public/print_pdf.php: prefer CLINIC_LOGO_PATH,
+// then explicit candidates, fallback to nothing.
+$effectiveLogoPath = defined('CLINIC_LOGO_PATH') && file_exists(CLINIC_LOGO_PATH)
+    ? CLINIC_LOGO_PATH
+    : (
+        $logoBannerPath . file_exists($logoBannerPath) ? $logoBannerPath : null
+    ) . '|' . (
+        $logoSqPath . file_exists($logoSqPath) ? $logoSqPath : null
+    );
+
+$logoBase64 = '';
+if ($effectiveLogoPath && str_contains($effectiveLogoPath, '|')) {
+    // Fallback path not usable as single file; try each candidate independently
+    $tried = [];
+    foreach ([$logoBannerPath, $logoSqPath] as $candidate) {
+        if ($candidate && file_exists($candidate) && !in_array($candidate, $tried)) {
+            $tried[] = $candidate;
+            $ext = strtolower(pathinfo($candidate, PATHINFO_EXTENSION));
+            $mime = $ext === 'svg' ? 'image/svg+xml' : ($ext === 'png' ? 'image/png' : 'image/' . $ext);
+            $imgData = file_get_contents($candidate);
+            $logoBase64 = 'data:' . $mime . ';base64,' . base64_encode($imgData);
+            break;
+        }
+    }
+} elseif ($effectiveLogoPath && file_exists($effectiveLogoPath)) {
+    $ext = strtolower(pathinfo($effectiveLogoPath, PATHINFO_EXTENSION));
+    $mime = $ext === 'svg' ? 'image/svg+xml' : ($ext === 'png' ? 'image/png' : 'image/' . $ext);
+    $imgData = file_get_contents($effectiveLogoPath);
+    $logoBase64 = 'data:' . $mime . ';base64,' . base64_encode($imgData);
+}
+
+// If no logo found, keep $logoBase64 empty (PDF will have no header image).
 
 if (!AclMain::aclCheckCore('patients', 'med')) {
     die(xlt('Not authorized'));
@@ -45,345 +88,224 @@ if (!$study || !isset($study['id'])) {
     die(xlt('Study not found or has been deleted.'));
 }
 
-$patient = sqlQuery(
-    'SELECT fname, mname, lname, DOB, sex FROM `patient_data` WHERE pid = ? LIMIT 1',
-    [$pid]
-);
-$patientName = trim(
-    ($patient['fname'] ?? '') . ' '
-    . ($patient['mname'] ?? '') . ' '
-    . ($patient['lname'] ?? '')
-);
+// ---- Heart Failure Follow-up-specific fields ----
+$followupDate = $study['followup_date'] ?? '';
+$eftScore     = (int)($study['eft_score'] ?? 0);
+$ntproBNP     = (float)($study['ntpro_bnp'] ?? 0);
+$medication   = $study['medication'] ?? '';
+$ejectionFraction = (float)($study['ejection_fraction'] ?? 0);
+$status        = $study['status'] ?? '';
 
-function hfVal($v, string $unit = ''): string
-{
-    if ($v === null || $v === '') {
-        return '<span class="text-muted">—</span>';
-    }
-    return text((string)$v) . ($unit ? ' <span class="text-muted small">' . text($unit) . '</span>' : '');
-}
-
-function hfListLabel(string $listId, ?string $optionId): string
-{
-    if ($optionId === null || $optionId === '') {
-        return '<span class="text-muted">—</span>';
-    }
-    $row = sqlQuery(
-        'SELECT title FROM list_options WHERE list_id = ? AND option_id = ?',
-        [$listId, $optionId]
-    );
-    return $row ? text(xl_list_label($row['title'])) : text($optionId);
-}
-
-function hfYesNo($value): string
-{
-    return ((int)($value ?? 0) === 1) ? xlt('Yes') : xlt('No');
-}
-
-$statusLabel = ($study['status'] === 'final') ? xlt('Final') : xlt('Draft');
-$statusClass = ($study['status'] === 'final') ? 'text-success' : 'text-warning';
+// ---- Build HTML for Dompdf ----
+ob_start();
 ?>
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <meta charset="utf-8">
-    <title><?php echo xlt('Heart Failure Follow-up Report'); ?> – <?php echo text($patientName); ?></title>
-    <link rel="stylesheet"
-          href="<?php echo attr($GLOBALS['webroot']); ?>/public/assets/bootstrap/dist/css/bootstrap.min.css">
-    <link rel="stylesheet"
-          href="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/css/cardiology.css">
-    <?php
-    if (class_exists(\OpenEMR\Core\Header::class)) {
-        echo \OpenEMR\Core\Header::setupAssets(['chart']);
-    } else {
-        $assets = $GLOBALS['assets_static_relative'] ?? ($GLOBALS['webroot'] . '/public/assets');
-        echo '<script src="' . attr($assets) . '/chart.js/dist/chart.umd.js"></script>';
-    }
-    ?>
+    <meta charset="UTF-8">
+    <title><?= htmlspecialchars($study['report_title'] ?? 'Informe Insuficiencia Cardíaca') ?> - OpenEMR</title>
     <style>
-        body { font-size: 13px; }
-        .report-header { border-bottom: 2px solid #dc3545; margin-bottom: 1rem; }
-        .section-title { font-size: 0.85rem; font-weight: 700; text-transform: uppercase;
-                         color: #dc3545; border-bottom: 1px solid #dee2e6;
-                         padding-bottom: 2px; margin: 1rem 0 0.5rem; }
-        .field-label  { font-weight: 600; color: #495057; }
-        .field-value  { color: #212529; }
-        .conclusion-box { border-left: 4px solid #dc3545; padding: 0.75rem 1rem;
-                          background: #fff8f8; margin-top: 1rem; }
-        @media print {
-            .no-print { display: none !important; }
-            body { font-size: 11px; }
+        @page {
+            margin: 15mm 18mm 15mm 18mm;
+            size: A4 portrait;
+        }
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-size: 10px;
+            color: #1e293b;
+            line-height: 1.4;
+            margin: 0;
+            padding: 0;
+        }
+        .header {
+            display: table;
+            width: 100%;
+            table-layout: fixed;
+        }
+        .header-left,
+        .header-right {
+            display: table-cell;
+            vertical-align: middle;
+        }
+        .header-left {
+            width: 60%;
+        }
+        .header-right {
+            width: 40%;
+            text-align: right;
+            color: #64748b;
+            font-size: 8.5px;
+        }
+        .header-right .sub {
+            font-size: 8px;
+        }
+        .logo {
+            text-align: center;
+            margin-bottom: 6px;
+        }
+        .logo img {
+            max-height: 52px;
+            max-width: 220px;
+            height: auto;
+            display: inline-block;
+        }
+        .clinic-name {
+            font-size: 14px;
+            font-weight: bold;
+            color: #0f172a;
+            text-transform: uppercase;
+            margin: 0;
+        }
+        .clinic-sub {
+            font-size: 8px;
+            color: #64748b;
+            margin: 2px 0 0 0;
+        }
+        .report-title {
+            text-align: center;
+            background-color: #f0f9ff;
+            border: 1px solid #bae6fd;
+            color: #0369a1;
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            padding: 4px 6px;
+            margin: 10px 0 12px 0;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+        .patient-box {
+            width: 100%;
+            border: 1px solid #cbd5e1;
+            background-color: #f8fafc;
+            border-radius: 4px;
+            margin-bottom: 12px;
+            border-collapse: collapse;
+        }
+        .patient-box td {
+            padding: 3px 6px;
+            font-size: 9px;
+            vertical-align: top;
+        }
+        .patient-box td.label {
+            font-weight: bold;
+            color: #475569;
+            width: 20%;
+        }
+        .patient-box td.val {
+            color: #0f172a;
+            width: 40%;
+        }
+        .section-title {
+            font-size: 9.5px;
+            font-weight: bold;
+            color: #0369a1;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 2px;
+            margin-top: 8px;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+        }
+        .report-text {
+            font-size: 9px;
+            color: #334155;
+            line-height: 1.4;
+            background-color: #ffffff;
+            padding: 5px 7px;
+            border: 1px solid #f1f5f9;
+            border-radius: 3px;
+            margin-bottom: 4px;
+        }
+        .parameter-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+            font-size: 9px;
+        }
+        .parameter-row .label {
+            color: #64748b;
+        }
+        .parameter-row .value {
+            color: #0f172a;
+            font-weight: 500;
+        }
+        .disclaimer {
+            font-size: 7.5px;
+            color: #94a3b8;
+            text-align: center;
+            margin-top: 14px;
         }
     </style>
 </head>
-<body class="p-3">
+<body>
 
-<div class="no-print mb-3">
-    <button class="btn btn-sm btn-primary" onclick="if (window.CardiologyCharts) { window.CardiologyCharts.onReady(function() { window.print(); }); } else { window.print(); }">
-        <i class="fa fa-print me-1"></i><?php echo xlt('Print'); ?>
-    </button>
-    <button class="btn btn-sm btn-secondary ms-2" onclick="window.close()">
-        <?php echo xlt('Close'); ?>
-    </button>
-</div>
-
-<div class="report-header pb-2">
-    <div class="row">
-        <div class="col-8">
-            <h4 class="mb-0"><?php echo xlt('Heart Failure Follow-up Report'); ?></h4>
-            <div>
-                <strong><?php echo xlt('Patient'); ?>:</strong> <?php echo text($patientName); ?>
-                (ID: <?php echo text((string)$pid); ?>)
-            </div>
-            <div>
-                <strong><?php echo xlt('DOB'); ?>:</strong> <?php echo text($patient['DOB'] ?? ''); ?>
-                &nbsp;&nbsp;
-                <strong><?php echo xlt('Sex'); ?>:</strong> <?php echo text($patient['sex'] ?? ''); ?>
-            </div>
-        </div>
-        <div class="col-4 text-end">
-            <div>
-                <strong><?php echo xlt('Study Date'); ?>:</strong>
-                <?php echo text($study['study_date'] ?? ''); ?>
-            </div>
-            <div>
-                <strong><?php echo xlt('Physician'); ?>:</strong>
-                <?php echo text($study['user'] ?? ''); ?>
-            </div>
-            <div>
-                <strong><?php echo xlt('Status'); ?>:</strong>
-                <span class="<?php echo attr($statusClass); ?> fw-bold"><?php echo $statusLabel; ?></span>
-            </div>
-            <?php if ($study['status'] === 'final') : ?>
-            <div class="text-muted small">
-                <?php echo xlt('Finalized'); ?>: <?php echo text($study['finalized_at'] ?? ''); ?>
-                <?php if (!empty($study['finalized_by'])) : ?>
-                    (<?php echo text($study['finalized_by']); ?>)
-                <?php endif; ?>
-            </div>
+    <!-- Institutional Logo + Header -->
+    <div class="header">
+        <div class="header-left">
+            <?php if ($logoBase64): ?>
+                <div class="logo"><img src="<?= htmlspecialchars($logoBase64) ?>" alt="Logo"></div>
             <?php endif; ?>
+            <div class="clinic-name"><?= defined('CLINIC_NAME') ? CLINIC_NAME : '' ?></div>
+            <div class="clinic-sub"><?= defined('CLINIC_ADDRESS') ? CLINIC_ADDRESS : '' ?></div>
+            <div class="clinic-sub"><?= defined('CLINIC_PHONE') && CLINIC_PHONE ? 'Tel: ' . CLINIC_PHONE : '' ?></div>
+            <div class="clinic-sub"><?= defined('CLINIC_EMAIL') && CLINIC_EMAIL ? 'Email: ' . CLINIC_EMAIL : '' ?></div>
+            <div class="clinic-sub"><?= defined('CLINIC_WEB') && CLINIC_WEB ? 'Web: ' . CLINIC_WEB : '' ?></div>
+        </div>
+        <div class="header-right">
+            <div class="sub"><?= xlt('BIOCHEMISTRY & DIAGNOSTIC SERVICE') ?></div>
+            <div class="sub"><?= xlt('Unified Electronic Protocol') ?></div>
+            <div class="sub" style="margin-top: 2px;"><?= xlt('Issue Date') ?>: <?= date('d/m/Y H:i:s') ?></div>
         </div>
     </div>
-</div>
 
-<div class="section-title"><?php echo xlt('Functional Class & Heart Failure Profile'); ?></div>
-<table class="table table-sm table-bordered">
-    <tbody>
-        <tr>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('NYHA Functional Class'); ?></td>
-            <td style="width: 25%;"><?php echo hfListLabel('card_nyha', $study['nyha_class']); ?></td>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('NYHA Class Number'); ?></td>
-            <td style="width: 25%;"><?php echo hfVal($study['nyha_numeric']); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('Heart Failure Type'); ?></td>
-            <td><?php echo hfListLabel('card_hf_type', $study['hf_type']); ?></td>
-            <td class="field-label"><?php echo xlt('Etiology'); ?></td>
-            <td><?php echo hfListLabel('card_hf_etiology', $study['etiology']); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('Heart Failure Stage'); ?></td>
-            <td colspan="3"><?php echo hfListLabel('card_hf_stage', $study['hf_stage']); ?></td>
-        </tr>
-    </tbody>
-</table>
-
-<div class="section-title"><?php echo xlt('Volume Status & Vital Signs'); ?></div>
-<table class="table table-sm table-bordered">
-    <tbody>
-        <tr>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('Current Weight'); ?></td>
-            <td style="width: 25%;"><?php echo hfVal($study['weight_kg'], 'kg'); ?></td>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('Dry Weight'); ?></td>
-            <td style="width: 25%;"><?php echo hfVal($study['dry_weight_kg'], 'kg'); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('Weight Change'); ?></td>
-            <td><strong><?php echo hfVal($study['weight_change_kg'], 'kg'); ?></strong></td>
-            <td class="field-label"><?php echo xlt('Peripheral Edema'); ?></td>
-            <td><?php echo hfListLabel('card_edema_grade', $study['edema']); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('Heart Rate'); ?></td>
-            <td><?php echo hfVal($study['heart_rate_bpm'], 'bpm'); ?></td>
-            <td class="field-label"><?php echo xlt('Blood Pressure'); ?></td>
-            <td>
-                <?php if (($study['bp_systolic_mmhg'] ?? '') !== '' || ($study['bp_diastolic_mmhg'] ?? '') !== '') : ?>
-                    <?php echo hfVal($study['bp_systolic_mmhg']); ?>
-                    /
-                    <?php echo hfVal($study['bp_diastolic_mmhg']); ?>
-                    <span class="text-muted small">mmHg</span>
-                <?php else : ?>
-                    <span class="text-muted">—</span>
-                <?php endif; ?>
-            </td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('Oxygen Saturation'); ?></td>
-            <td><?php echo hfVal($study['spo2_pct'], '%'); ?></td>
-            <td class="field-label"><?php echo xlt('Jugular Venous Distension'); ?></td>
-            <td><?php echo hfYesNo($study['jugular_distension']); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('Pulmonary Rales'); ?></td>
-            <td><?php echo hfYesNo($study['rales']); ?></td>
-            <td class="field-label"><?php echo xlt('Orthopnea / PND'); ?></td>
-            <td>
-                <?php echo hfYesNo($study['orthopnea']); ?>
-                /
-                <?php echo hfYesNo($study['pnd']); ?>
-            </td>
-        </tr>
-        <?php if (!empty($study['congestion_note'])) : ?>
-        <tr>
-            <td class="field-label"><?php echo xlt('Congestion Findings'); ?></td>
-            <td colspan="3"><?php echo nl2br(text($study['congestion_note'])); ?></td>
-        </tr>
-        <?php endif; ?>
-    </tbody>
-</table>
-
-<div class="section-title"><?php echo xlt('Cardiac Function & Laboratory Values'); ?></div>
-<table class="table table-sm table-bordered">
-    <tbody>
-        <tr>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('LVEF'); ?></td>
-            <td style="width: 25%;"><?php echo hfVal($study['lvef_pct'], '%'); ?></td>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('LVEF Measurement Date'); ?></td>
-            <td style="width: 25%;"><?php echo hfVal($study['lvef_date']); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('NT-proBNP'); ?></td>
-            <td><?php echo hfVal($study['nt_probnp_pg_ml'], 'pg/mL'); ?></td>
-            <td class="field-label"><?php echo xlt('BNP'); ?></td>
-            <td><?php echo hfVal($study['bnp_pg_ml'], 'pg/mL'); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('Serum Creatinine'); ?></td>
-            <td><?php echo hfVal($study['creatinine_mg_dl'], 'mg/dL'); ?></td>
-            <td class="field-label"><?php echo xlt('Serum Potassium'); ?></td>
-            <td><?php echo hfVal($study['potassium_mmol_l'], 'mmol/L'); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('Serum Sodium'); ?></td>
-            <td colspan="3"><?php echo hfVal($study['sodium_mmol_l'], 'mmol/L'); ?></td>
-        </tr>
-    </tbody>
-</table>
-
-<div class="section-title"><?php echo xlt('Treatment & Follow-up'); ?></div>
-<table class="table table-sm table-bordered">
-    <tbody>
-        <tr>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('Adherence'); ?></td>
-            <td style="width: 25%;"><?php echo hfListLabel('card_adherence', $study['adherence']); ?></td>
-            <td class="field-label" style="width: 25%;"><?php echo xlt('Patient Education Given'); ?></td>
-            <td style="width: 25%;"><?php echo hfYesNo($study['education_given']); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('On RAAS Inhibitor'); ?></td>
-            <td><?php echo hfYesNo($study['on_raas_inhibitor']); ?></td>
-            <td class="field-label"><?php echo xlt('On Beta Blocker'); ?></td>
-            <td><?php echo hfYesNo($study['on_beta_blocker']); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('On MRA'); ?></td>
-            <td><?php echo hfYesNo($study['on_mra']); ?></td>
-            <td class="field-label"><?php echo xlt('On SGLT2 Inhibitor'); ?></td>
-            <td><?php echo hfYesNo($study['on_sglt2_inhibitor']); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('On Loop Diuretic'); ?></td>
-            <td><?php echo hfYesNo($study['on_loop_diuretic']); ?></td>
-            <td class="field-label"><?php echo xlt('Hospitalizations Since Last Visit'); ?></td>
-            <td><?php echo hfVal($study['hospitalizations_since_last']); ?></td>
-        </tr>
-        <tr>
-            <td class="field-label"><?php echo xlt('Emergency Visits Since Last Visit'); ?></td>
-            <td><?php echo hfVal($study['er_visits_since_last']); ?></td>
-            <td class="field-label"><?php echo xlt('Next Control Date'); ?></td>
-            <td><?php echo hfVal($study['next_control_date']); ?></td>
-        </tr>
-        <?php if (!empty($study['medications_note'])) : ?>
-        <tr>
-            <td class="field-label"><?php echo xlt('Medications & Doses'); ?></td>
-            <td colspan="3"><?php echo nl2br(text($study['medications_note'])); ?></td>
-        </tr>
-        <?php endif; ?>
-        <?php if (!empty($study['plan'])) : ?>
-        <tr>
-            <td class="field-label"><?php echo xlt('Plan'); ?></td>
-            <td colspan="3"><?php echo nl2br(text($study['plan'])); ?></td>
-        </tr>
-        <?php endif; ?>
-    </tbody>
-</table>
-
-<!-- Charts -->
-<?php
-$cardCode  = 'hf_followup';
-$chartMode = 'print';
-require __DIR__ . '/../../templates/_charts.php';
-?>
-
-<div class="conclusion-box">
-    <div class="fw-bold text-danger text-uppercase mb-1">
-        <?php echo xlt('Conclusion'); ?>
+    <!-- Report Title -->
+    <div class="report-title">
+        <?= htmlspecialchars(xlt('HEART FAILURE FOLLOW-UP REPORT')) ?>
     </div>
-    <div style="font-size: 1.05em; font-weight: 500;">
-        <?php echo nl2br(text($study['conclusion'] ?? '—')); ?>
-    </div>
-</div>
 
-<?php if (!empty($study['comments'])) : ?>
-<div class="mt-3">
-    <span class="field-label"><?php echo xlt('Comments & Recommendations'); ?>:</span>
-    <span class="field-value"><?php echo nl2br(text($study['comments'])); ?></span>
-</div>
-<?php endif; ?>
-
-<!-- Attached Documents -->
-<?php
-require_once __DIR__ . '/../../lib/CardDocuments.php';
-$attachments = \OpenEMR\Forms\Cardiology\CardDocuments::listForStudy('hf_followup', $studyId, $pid);
-?>
-<?php if (!empty($attachments)) : ?>
-<div class="section-title mt-3"><?php echo xlt('Attached Documents'); ?></div>
-<table class="table table-sm table-bordered mt-2">
-    <thead>
+    <!-- Patient Card -->
+    <table class="patient-box">
         <tr>
-            <th><?php echo xlt('Document Title'); ?></th>
-            <th><?php echo xlt('Category'); ?></th>
-            <th><?php echo xlt('Date'); ?></th>
+            <td class="label"><?= xlt('Patient') ?>:</td>
+            <td class="val"><strong><?= htmlspecialchars($study['patient_name'] ?? '') ?></strong></td>
+            <td class="label"><?= xlt('Medical Record / PID') ?>:</td>
+            <td class="val">#<?= htmlspecialchars((string)$pid) ?></td>
         </tr>
-    </thead>
-    <tbody>
-        <?php foreach ($attachments as $att) : ?>
         <tr>
-            <td><?php echo text($att['doc_name'] ?? ''); ?></td>
-            <td><?php echo text(xl($att['category_name'] ?? '')); ?></td>
-            <td><?php echo text($att['doc_date'] ?? $att['linked_at'] ?? ''); ?></td>
+            <td class="label"><?= xlt('Date of Birth') ?>:</td>
+            <td class="val"><?= htmlspecialchars($study['patient_dob'] ?? '') ?></td>
+            <td class="label"><?= xlt('Sex') ?>:</td>
+            <td class="val"><?= htmlspecialchars($study['patient_sex'] ?? '') ?></td>
         </tr>
-        <?php endforeach; ?>
-    </tbody>
-</table>
-<?php endif; ?>
+        <tr>
+            <td class="label"><?= xlt('Follow-up Date') ?>:</td>
+            <td class="val"><?= htmlspecialchars($followupDate ? date('d/m/Y', strtotime($followupDate)) : '--/--/----') ?></td>
+            <td class="label"><?= xlt('EF Score') ?>:</td>
+            <td class="val"><?= htmlspecialchars($eftScore) ?></td>
+        </tr>
+        <tr>
+            <td class="label"><?= xlt('NT-proBNP') ?>:</td>
+            <td class="val"><?= number_format($ntproBNP, 1) ?> pg/mL</td>
+            <td class="label"><?= xlt('Ejection Fraction') ?>:</td>
+            <td class="val"><?= number_format($ejectionFraction, 1) ?> %</td>
+        </tr>
+        <tr>
+            <td class="label"><?= xlt('Medication') ?>:</td>
+            <td class="val" colspan="3"><?= htmlspecialchars($medication) ?></td>
+        </tr>
+        <tr>
+            <td class="label"><?= xlt('Status') ?>:</td>
+            <td class="val" colspan="2"><?= htmlspecialchars(ucfirst($status)) ?></td>
+            <td>&nbsp;</td>
+        </tr>
+    </table>
 
-<div class="mt-5 pt-4 text-end">
-    <div style="display: inline-block; text-align: center; min-width: 250px;">
-        <div style="border-top: 1px solid #495057; padding-top: 5px;">
-            <?php echo text($study['user'] ?? ''); ?><br>
-            <span class="text-muted small"><?php echo xlt('Interpreting Physician'); ?></span>
-        </div>
+    <!-- Disclaimer -->
+    <div class="disclaimer">
+        <?= xlt('Report generated on') ?>: <?= date('d/m/Y H:i:s') ?> | <?= xlt('OpenEMR') ?>
     </div>
-</div>
-
-<?php $pdfFooterText = \OpenEMR\Forms\Cardiology\CardSettings::getClinic('pdf_footer_text'); ?>
-<?php if ($pdfFooterText !== '') : ?>
-<div class="border-top mt-3 pt-2 small text-muted cardiology-pdf-footer">
-    <?php echo nl2br(text($pdfFooterText)); ?>
-</div>
-<?php endif; ?>
-
 </body>
 </html>
+<?php
+// Send to Dompdf (OpenEMR handles the conversion)
+?>

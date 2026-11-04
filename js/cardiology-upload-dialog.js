@@ -20,6 +20,10 @@
 
         var dropZone = document.getElementById('cardiology-upload-dropzone');
         var fileInput = document.getElementById('cardiology-upload-input');
+        var fileNameEl = document.getElementById('cardiology-upload-file-name');
+        var treeEl = document.getElementById('cardiology-tree');
+        var selectionEl = document.getElementById('cardiology-selection-display');
+        var docsTbody = document.getElementById('cardiology-upload-docs-tbody');
         var queueEl = document.getElementById('cardiology-upload-queue');
         var alertEl = document.getElementById('cardiology-upload-alert');
         var btnSubmit = document.getElementById('cardiology-upload-submit');
@@ -33,6 +37,9 @@
         var cancelled = false;
         var activeXhr = null;
         var reported = false;
+        var selectedCategoryId = parseInt(config.categoryId, 10) || 0;
+        var selectedCategoryName = '';
+        var latestAttachments = Array.isArray(config.attachments) ? config.attachments : [];
 
         function msg(key, fallback) {
             if (i18n[key]) {
@@ -79,6 +86,132 @@
                 .replace(/'/g, '&#039;');
         }
 
+        function mimeInfo(mimetype) {
+            var mime = String(mimetype || '').toLowerCase();
+            if (mime.indexOf('pdf') !== -1) {
+                return { label: msg('typePdf', 'PDF'), cls: 'cardiology-mime-pdf' };
+            }
+            if (mime.indexOf('image') !== -1) {
+                return { label: msg('typeImage', 'IMAGE'), cls: 'cardiology-mime-image' };
+            }
+            if (mime.indexOf('dicom') !== -1) {
+                return { label: msg('typeDicom', 'DICOM'), cls: 'cardiology-mime-dicom' };
+            }
+            return { label: msg('typeOther', 'OTHER'), cls: 'cardiology-mime-other' };
+        }
+
+        function renderAttachments(attachments) {
+            if (!docsTbody) {
+                return;
+            }
+
+            docsTbody.innerHTML = '';
+
+            if (!attachments || attachments.length === 0) {
+                var emptyRow = document.createElement('tr');
+                emptyRow.innerHTML = '<td colspan="6" class="text-center text-muted fst-italic py-4">' +
+                    escapeHtml(msg('noDocuments', 'No documents uploaded for this study.')) + '</td>';
+                docsTbody.appendChild(emptyRow);
+                return;
+            }
+
+            attachments.forEach(function (att) {
+                var type = mimeInfo(att.mimetype);
+                var docDate = String(att.doc_date || att.linked_at || '').substring(0, 16);
+                var openUrl = String(config.retrieveBase || '') + encodeURIComponent(att.document_id);
+
+                var row = document.createElement('tr');
+                row.setAttribute('data-doc-id', att.document_id);
+                row.innerHTML =
+                    '<td class="text-break">' + escapeHtml(att.doc_name || '') + '</td>' +
+                    '<td><span class="text-secondary small">' + escapeHtml(att.category_name || '') + '</span></td>' +
+                    '<td><span class="cardiology-mime-badge ' + type.cls + '">' + escapeHtml(type.label) + '</span></td>' +
+                    '<td class="text-end small text-muted">' + escapeHtml(formatBytes(att.size || 0)) + '</td>' +
+                    '<td class="text-center small text-muted">' + escapeHtml(docDate !== '' ? docDate : '—') + '</td>' +
+                    '<td class="text-center">' +
+                    '<a href="' + escapeHtml(openUrl) + '" target="_blank" rel="noopener" ' +
+                    'class="btn btn-sm btn-outline-primary" title="' + escapeHtml(msg('openTitle', 'Open document')) + '" ' +
+                    'aria-label="' + escapeHtml(msg('openTitle', 'Open document')) + '">' +
+                    '<i class="fa fa-eye" aria-hidden="true"></i>' +
+                    '</a>' +
+                    '</td>';
+
+                docsTbody.appendChild(row);
+            });
+        }
+
+        function categoryNode(id) {
+            if (!treeEl) {
+                return null;
+            }
+            return treeEl.querySelector('.cardiology-tree-node[data-id="' + String(id) + '"]');
+        }
+
+        function clearCategorySelection() {
+            selectedCategoryId = 0;
+            selectedCategoryName = '';
+            if (treeEl) {
+                Array.prototype.forEach.call(treeEl.querySelectorAll('.cardiology-tree-node.selected'), function (node) {
+                    node.classList.remove('selected');
+                });
+            }
+            if (selectionEl) {
+                selectionEl.classList.remove('has-selection');
+                selectionEl.textContent = msg('noFolderSelected', 'No folder selected');
+            }
+            updateButtons();
+        }
+
+        function selectCategory(id, name) {
+            selectedCategoryId = parseInt(id, 10) || 0;
+            selectedCategoryName = String(name || '');
+
+            if (treeEl) {
+                Array.prototype.forEach.call(treeEl.querySelectorAll('.cardiology-tree-node.selected'), function (node) {
+                    node.classList.remove('selected');
+                });
+                var node = categoryNode(selectedCategoryId);
+                if (node) {
+                    node.classList.add('selected');
+                }
+            }
+
+            if (selectionEl) {
+                selectionEl.classList.add('has-selection');
+                selectionEl.innerHTML = '<i class="fa fa-folder-open me-1" aria-hidden="true"></i>' +
+                    escapeHtml(selectedCategoryName);
+            }
+
+            updateButtons();
+        }
+
+        function toggleCategoryNode(node) {
+            if (!node) {
+                return;
+            }
+
+            var id = parseInt(node.getAttribute('data-id'), 10) || 0;
+            var name = node.getAttribute('data-name') || '';
+
+            if (node.classList.contains('has-children')) {
+                var children = document.getElementById('cardiology-tree-children-' + id);
+                var toggle = node.querySelector('.cardiology-tree-toggle');
+                if (children) {
+                    var collapsed = children.classList.toggle('is-collapsed');
+                    if (toggle) {
+                        toggle.classList.toggle('collapsed', collapsed);
+                    }
+                    node.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                }
+                return;
+            }
+
+            if (node.getAttribute('data-selectable') === '1') {
+                selectCategory(id, name);
+            }
+        }
+
+
         function extensionOf(name) {
             var idx = String(name || '').lastIndexOf('.');
             return idx === -1 ? '' : String(name).substring(idx + 1).toLowerCase();
@@ -120,9 +253,27 @@
             reported = false;
             hideAlert();
 
+            // In keepOpen mode the dialog stays mounted after a batch. Drop
+            // uploaded rows from the queue so new selections do not count
+            // against maxFiles; the right-hand table keeps the history.
+            if (queue.length > 0) {
+                queue = queue.filter(function (item) {
+                    return item.status !== 'uploaded';
+                });
+            }
+
             var incoming = Array.prototype.slice.call(fileList || []);
             if (incoming.length === 0) {
                 return;
+            }
+
+            if (fileNameEl) {
+                var label = incoming[0].name;
+                if (incoming.length > 1) {
+                    label += ' +' + (incoming.length - 1);
+                }
+                fileNameEl.textContent = label;
+                fileNameEl.classList.remove('d-none');
             }
 
             if (config.multiple !== 1) {
@@ -240,6 +391,10 @@
                     break;
                 }
             }
+            if (queue.length === 0 && fileNameEl) {
+                fileNameEl.classList.add('d-none');
+                fileNameEl.textContent = '';
+            }
             renderQueue();
             updateButtons();
         }
@@ -269,7 +424,7 @@
             var current = counts();
 
             if (btnSubmit) {
-                btnSubmit.disabled = isUploading || current.pending === 0;
+                btnSubmit.disabled = isUploading || current.pending === 0 || selectedCategoryId <= 0;
             }
             if (btnRetry) {
                 btnRetry.classList.toggle('d-none', isUploading || current.failed === 0);
@@ -284,6 +439,10 @@
 
         function startUpload() {
             if (isUploading) {
+                return;
+            }
+            if (!selectedCategoryId) {
+                showAlert(msg('selectFolderFirst', 'Please select a destination folder first.'), 'warning');
                 return;
             }
             if (counts().pending === 0) {
@@ -330,9 +489,8 @@
             var formData = new FormData();
             formData.append('csrf_token_form', config.csrfToken || '');
             formData.append('pid', config.pid || '');
-            if (config.categoryId) {
-                formData.append('category_id', config.categoryId);
-            }
+            formData.append('category_id', selectedCategoryId);
+            formData.append('keep_open', config.keepOpen ? '1' : '0');
             if (config.cardCode) {
                 formData.append('card_code', config.cardCode);
             }
@@ -374,6 +532,11 @@
                         item.error = (response.errors && response.errors[0] && response.errors[0].message)
                             ? response.errors[0].message
                             : msg('networkError', 'Network error while uploading.');
+                    }
+
+                    if (response.attachments) {
+                        latestAttachments = response.attachments;
+                        renderAttachments(response.attachments);
                     }
                 } catch (error) {
                     item.status = 'failed';
@@ -454,12 +617,14 @@
             return {
                 source: 'cardiology-upload',
                 status: status,
+                keepOpen: config.keepOpen === true || config.keepOpen === 1 || config.keepOpen === '1',
                 documents: documents,
-                errors: errors
+                errors: errors,
+                attachments: latestAttachments
             };
         }
 
-        function postToOpener(payload) {
+        function sendToOpener(payload) {
             try {
                 var target = (window.parent && window.parent !== window) ? window.parent : window.opener;
                 if (target && typeof target.postMessage === 'function') {
@@ -470,6 +635,10 @@
                 // Cross-origin or missing opener: keep the dialog open with its summary.
             }
             return false;
+        }
+
+        function postToOpener(payload) {
+            return sendToOpener(payload);
         }
 
         function finishBatch() {
@@ -484,11 +653,11 @@
             }
 
             var payload = buildPayload();
+            var hasResults = payload.documents.length > 0 || payload.errors.length > 0;
 
-            // When everything succeeds, automatically report to the opener and
-            // allow the opener to close the dialog via postMessage. When some
-            // files fail, keep the dialog open so the user can retry failed files.
-            if (!reported && current.failed === 0 && payload.documents.length > 0) {
+            // Report every finished batch. The opener decides whether to close
+            // the dialog or keep it open (keepOpen) and refresh its own table.
+            if (hasResults) {
                 reported = true;
                 postToOpener(payload);
             }
@@ -504,31 +673,30 @@
         function closeDialog() {
             var payload = buildPayload();
             var hasResults = payload.documents.length > 0 || payload.errors.length > 0;
-            var posted = false;
 
             if (hasResults && !reported) {
                 reported = true;
-                posted = postToOpener(payload);
+                postToOpener(payload);
             }
 
-            var selfClose = function () {
-                try {
-                    if (window.parent && window.parent !== window && typeof window.parent.dlgclose === 'function') {
-                        window.parent.dlgclose();
-                    } else if (typeof window.dlgclose === 'function') {
-                        window.dlgclose();
-                    }
-                } catch (error) {
-                    // The opener hides the dialog after receiving the message.
-                }
-            };
+            // The opener owns the modal in both dlgopen() and Bootstrap modes.
+            // Tell it to close so keepOpen batches cannot leave the dialog stuck
+            // when the page has no global dlgclose() helper.
+            if (sendToOpener({ source: 'cardiology-upload', action: 'close' })) {
+                return;
+            }
 
-            // Give the opener a chance to receive the message before the frame
-            // is removed. Without a receiver the dialog still closes itself.
-            if (posted) {
-                window.setTimeout(selfClose, 150);
-            } else {
-                selfClose();
+            // Native popup fallback with no reachable opener: close ourselves.
+            try {
+                if (window.parent && window.parent !== window && typeof window.parent.dlgclose === 'function') {
+                    window.parent.dlgclose();
+                } else if (typeof window.dlgclose === 'function') {
+                    window.dlgclose();
+                } else {
+                    window.close();
+                }
+            } catch (error) {
+                // Nothing left to close.
             }
         }
 
@@ -570,12 +738,47 @@
             }
         }
 
-        if (dropZone) {
-            dropZone.addEventListener('click', function () {
-                if (!isUploading && fileInput) {
-                    fileInput.click();
+        if (treeEl) {
+            treeEl.addEventListener('click', function (event) {
+                var node = event.target.closest ? event.target.closest('.cardiology-tree-node') : null;
+                if (node && treeEl.contains(node)) {
+                    toggleCategoryNode(node);
                 }
             });
+
+            treeEl.addEventListener('keydown', function (event) {
+                if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') {
+                    return;
+                }
+                var node = event.target.closest ? event.target.closest('.cardiology-tree-node') : null;
+                if (node && treeEl.contains(node)) {
+                    event.preventDefault();
+                    toggleCategoryNode(node);
+                }
+            });
+        }
+
+        if (selectedCategoryId > 0) {
+            var initialNode = categoryNode(selectedCategoryId);
+            if (initialNode && initialNode.getAttribute('data-selectable') === '1') {
+                selectCategory(selectedCategoryId, initialNode.getAttribute('data-name') || '');
+            } else {
+                clearCategorySelection();
+            }
+        }
+
+        renderAttachments(config.attachments || []);
+
+        if (dropZone) {
+            var hasOverlayInput = fileInput && dropZone.contains(fileInput);
+
+            if (!hasOverlayInput) {
+                dropZone.addEventListener('click', function () {
+                    if (!isUploading && fileInput) {
+                        fileInput.click();
+                    }
+                });
+            }
 
             dropZone.addEventListener('keydown', function (event) {
                 if (isUploading) {
