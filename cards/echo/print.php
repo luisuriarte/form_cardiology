@@ -97,7 +97,7 @@ if (!$study || !isset($study['id'])) {
 
 // ---- Additional fields (echo specific) ----
 $views = sqlQuery(
-    'SELECT * FROM `form_card_echo_views` WHERE echo_id = ? LIMIT 1',
+    'SELECT * FROM `form_card_echo` WHERE id = ? LIMIT 1',
     [$studyId]
 );
 $ejectionFraction = (float)($views['ef'] ?? 0);
@@ -306,7 +306,7 @@ ob_start();
     <table class="patient-box">
         <tr>
             <td class="label"><?= xlt('Patient') ?>:</td>
-            <td class="val"><strong><?= htmlspecialchars($study['patient_name']) ?></strong></td>
+            <td class="val"><strong><?= htmlspecialchars($study['patient_name'] ?? '') ?></strong></td>
             <td class="label"><?= xlt('Medical Record / PID') ?>:</td>
             <td class="val">#<?= htmlspecialchars((string)$study['pid']) ?></td>
         </tr>

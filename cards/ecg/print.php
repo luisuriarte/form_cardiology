@@ -91,11 +91,11 @@ if (!$study || !isset($study['id'])) {
 // ---- ECG-specific fields ----
 $ecgDate     = $study['ecg_date']     ?? '';
 $leadI       = $study['lead_i']       ?? '';
-leadII       = $study['lead_ii']      ?? '';
-leadV5       = $study['lead_v5']      ?? ;
+$leadII       = $study['lead_ii']      ?? '';
+$leadV5       = $study['lead_v5']      ?? '';
 $qTInterval  = (float)($study['qt_interval']  ?? 0);
-$qRSComplex   = $study['qrs_complex']   ?? ;
-$rhythm      = $study['rhythm']       ?? ;
+$qRSComplex   = $study['qrs_complex']   ?? '';
+$rhythm      = $study['rhythm']       ?? '';
 $status      = $study['status']       ?? '';
 
 // ---- Build HTML for Dompdf ----
