@@ -368,11 +368,9 @@ if ($context !== null && $context['card_code'] !== null && $context['study_id'] 
     );
 }
 
-// Keep OpenEMR's positional retrieve arguments in order: patient_id,
-// document_id, as_file, original_file, disable_exit, show_original.
-$retrieveBase = $GLOBALS['webroot'] . '/controller.php?document&retrieve&patient_id='
-    . urlencode((string)$pid) . '&document_id=';
-$retrieveSuffix = '&as_file=false&original_file=true&disable_exit=false&show_original=true';
+// Inline viewer endpoint: serves the file with Content-Disposition: inline in a new tab.
+$retrieveBase = CardiologyContainer::getFormRootUrl() . '/documents_view.php?document_id=';
+$retrieveSuffix = '';
 
 $config = [
     'pid'            => $pid,

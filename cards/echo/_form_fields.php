@@ -49,7 +49,7 @@ $dis = $readOnly ? ' disabled' : '';
 </div>
 <?php endif; ?>
 
-<!-- Sección 1: Contexto clínico -->
+<!-- Section 1: Clinical Context -->
 <fieldset class="mb-4">
 <legend class="cardiology-section-title">
     <i class="fa fa-info-circle me-1" aria-hidden="true"></i>
@@ -117,7 +117,7 @@ $dis = $readOnly ? ' disabled' : '';
 </div>
 </fieldset>
 
-<!-- Sección 2: VI – Dimensiones y función sistólica -->
+<!-- Section 2: LV - Dimensions and systolic function -->
 <fieldset class="mb-4">
 <legend class="cardiology-section-title">
     <?php echo xlt('Left Ventricle – Dimensions & Systolic Function'); ?>
@@ -185,7 +185,7 @@ $dis = $readOnly ? ' disabled' : '';
 </div>
 </fieldset>
 
-<!-- Sección 3: VI – Función diastólica -->
+<!-- Section 3: LV - Diastolic function -->
 <fieldset class="mb-4">
 <legend class="cardiology-section-title">
     <?php echo xlt('Left Ventricle – Diastolic Function'); ?>
@@ -244,7 +244,7 @@ $dis = $readOnly ? ' disabled' : '';
 </div>
 </fieldset>
 
-<!-- Sección 4: Aurículas -->
+<!-- Section 4: Atria -->
 <fieldset class="mb-4">
 <legend class="cardiology-section-title"><?php echo xlt('Atria'); ?></legend>
 <div class="row g-2">
@@ -275,7 +275,7 @@ $dis = $readOnly ? ' disabled' : '';
 </div>
 </fieldset>
 
-<!-- Sección 5: VD y presión pulmonar -->
+<!-- Section 5: RV and pulmonary pressure -->
 <fieldset class="mb-4">
 <legend class="cardiology-section-title">
     <?php echo xlt('Right Ventricle & Pulmonary Pressure'); ?>
@@ -307,7 +307,7 @@ $dis = $readOnly ? ' disabled' : '';
 </div>
 </fieldset>
 
-<!-- Sección 6: Aorta -->
+<!-- Section 6: Aorta -->
 <fieldset class="mb-4">
 <legend class="cardiology-section-title"><?php echo xlt('Aorta'); ?></legend>
 <div class="row g-2">
@@ -326,7 +326,7 @@ $dis = $readOnly ? ' disabled' : '';
 </div>
 </fieldset>
 
-<!-- Sección 7: Válvulas -->
+<!-- Section 7: Valves -->
 <fieldset class="mb-4">
 <legend class="cardiology-section-title"><?php echo xlt('Valves'); ?></legend>
 
@@ -421,7 +421,7 @@ $dis = $readOnly ? ' disabled' : '';
 </div>
 </fieldset>
 
-<!-- Sección 8: Pericardio -->
+<!-- Section 8: Pericardium -->
 <fieldset class="mb-4">
 <legend class="cardiology-section-title"><?php echo xlt('Pericardium'); ?></legend>
 <div class="row g-2">
@@ -437,7 +437,7 @@ $dis = $readOnly ? ' disabled' : '';
 </div>
 </fieldset>
 
-<!-- Sección 9: Informe -->
+<!-- Section 9: Report -->
 <fieldset class="mb-4">
 <legend class="cardiology-section-title"><?php echo xlt('Report'); ?></legend>
 <div class="row g-2">

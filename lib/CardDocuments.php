@@ -573,7 +573,7 @@ final class CardDocuments
     /**
      * Resolves the core Document class path across supported OpenEMR layouts.
      */
-    private static function getDocumentClassPath(): string
+    public static function getDocumentClassPath(): string
     {
         if (!empty($GLOBALS['srcdir'])) {
             $path = rtrim((string)$GLOBALS['srcdir'], '/\\') . '/classes/Document.class.php';
@@ -583,6 +583,41 @@ final class CardDocuments
         }
 
         return __DIR__ . '/../../../library/classes/Document.class.php';
+    }
+
+    /**
+     * Determines a final MIME type and extension for viewing a stored document.
+     *
+     * The stored documents.mimetype is normally the fileinfo result at upload
+     * time, but a file renamed by the tolerant upload validator (or imported
+     * elsewhere) can leave it missing, empty, or generic. This helper falls
+     * back to the extension map and, when a real file path is known, to the
+     * actual file content, so the viewer never serves application/octet-stream.
+     *
+     * @return array{mime: string, extension: string}
+     */
+    public static function resolveViewMime(string $storedMime, string $filename, ?string $filePath = null): array
+    {
+        $mime = strtolower(trim($storedMime));
+        $extension = strtolower((string)pathinfo($filename, PATHINFO_EXTENSION));
+
+        if ($mime !== '' && $mime !== 'application/octet-stream') {
+            return ['mime' => $mime, 'extension' => $extension !== '' ? $extension : (self::extensionForMime($mime) ?? 'bin')];
+        }
+
+        if ($filePath !== null && is_file($filePath)) {
+            $detected = self::detectMimeType($filePath);
+            if ($detected !== '' && $detected !== 'application/octet-stream') {
+                return ['mime' => $detected, 'extension' => $extension !== '' ? $extension : (self::extensionForMime($detected) ?? 'bin')];
+            }
+        }
+
+        $mimeForExt = self::ALLOWED_MIME_MAP[$extension][0] ?? null;
+        if ($mimeForExt !== null) {
+            return ['mime' => $mimeForExt, 'extension' => $extension];
+        }
+
+        return ['mime' => 'application/octet-stream', 'extension' => $extension !== '' ? $extension : 'bin'];
     }
 
     /**

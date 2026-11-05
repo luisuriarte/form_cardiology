@@ -28,6 +28,7 @@ use OpenEMR\Forms\Cardiology\CardiologyContainer;
 // Institutional logo for printable reports (Dompdf-safe data URI)
 // ---------------------------------------------------------------------------
 require_once(__DIR__ . '/../../lib/CardPrintAssets.php');
+require_once(__DIR__ . '/../../lib/CardPrintReport.php');
 
 $logoBase64 = \OpenEMR\Forms\Cardiology\CardPrintAssets::logoDataUri();
 
@@ -54,6 +55,20 @@ if (!$study || !isset($study['id'])) {
     die(xlt('Study not found or has been deleted.'));
 }
 
+// Patient + encounter via OpenEMR services (PatientService / EncounterService),
+// with direct-query fallback inside CardPrintReport. Populates the legacy
+// $study[...] keys the patient box below already expects.
+$printPatient = \OpenEMR\Forms\Cardiology\CardPrintReport::patient($pid);
+$printEncounter = \OpenEMR\Forms\Cardiology\CardPrintReport::encounter($pid, (int)($study['encounter'] ?? $encounter));
+$study['patient_name'] = \OpenEMR\Forms\Cardiology\CardPrintReport::patientName($printPatient);
+$study['patient_dob'] = \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($printPatient['DOB'] ?? null);
+$study['patient_sex'] = (string)($printPatient['sex'] ?? '');
+$study['patient_dni'] = (string)($printPatient['ss'] ?? $printPatient['pubpid'] ?? '');
+$study['patient_age'] = \OpenEMR\Forms\Cardiology\CardPrintReport::patientAge($printPatient);
+$study['encounter_label'] = \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($printEncounter['reason'] ?? null);
+$study['batch_date_formatted'] = \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($printEncounter['date'] ?? null);
+
+
 // ---- Anticoagulation-specific fields ----
 $testDate    = $study['test_date']    ?? '';
 $testTime    = $study['test_time']    ?? '';
@@ -71,10 +86,10 @@ ob_start();
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title><?= htmlspecialchars($study['report_title'] ?? 'Informe Anticoagulación') ?> - OpenEMR</title>
+    <title><?= htmlspecialchars($study['report_title'] ?? xlt('Anticoagulation Monitoring Report')) ?> - OpenEMR</title>
     <style>
         @page {
-            margin: 18mm 15mm 16mm 15mm;
+            margin: 20mm 15mm 18mm 15mm;
             size: A4 portrait;
         }
         body {
@@ -83,7 +98,7 @@ ob_start();
             color: #1e293b;
             line-height: 1.5;
             margin: 0;
-            padding: 0;
+            padding: 4mm;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
         }
@@ -214,6 +229,8 @@ ob_start();
 </head>
 <body>
 
+    <?= \OpenEMR\Forms\Cardiology\CardPrintReport::toolbarHtml() ?>
+
     <!-- Institutional Logo + Header -->
     <?php if ($logoBase64): ?>
         <div class="logo"><img src="<?= htmlspecialchars($logoBase64) ?>" alt="Logo"></div>
@@ -280,6 +297,9 @@ ob_start();
         </tr>
     </table>
 
+        <!-- All study fields (complete record) -->
+    <?= \OpenEMR\Forms\Cardiology\CardPrintReport::genericSections($study, xlt('Study Data')) ?>
+
     <!-- Disclaimer -->
     <div class="disclaimer">
         <?= xlt('Report generated on') ?>: <?= date('d/m/Y H:i:s') ?> | <?= xlt('OpenEMR') ?>
@@ -287,5 +307,13 @@ ob_start();
 </body>
 </html>
 <?php
-// Send to Dompdf (OpenEMR handles the conversion)
+// Download as a real PDF file when ?download=1 (Dompdf, server-side).
+// Otherwise the buffered HTML is flushed and shown in the browser.
+if (($_GET['download'] ?? '') === '1') {
+    $reportHtml = (string)ob_get_clean();
+    \OpenEMR\Forms\Cardiology\CardPrintReport::downloadPdf(
+        $reportHtml,
+        'Anticoagulation_study_' . $studyId . '_encounter_' . $encounter . '.pdf'
+    );
+}
 ?>

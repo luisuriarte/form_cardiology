@@ -583,15 +583,18 @@ la tabla de adjuntos del estudio se refresca sin recargar la página.
 ### Visor de documentos
 
 Los enlaces de adjuntos (`templates/_documents.php`, `documents_upload.php` y el
-diálogo de subida) apuntan a
-`controller.php?document&retrieve&patient_id=...&document_id=...&as_file=false&original_file=true&disable_exit=false&show_original=true`.
-Mantener los argumentos en ese orden posicional: el despachador legacy del
-controlador pasa los argumentos de la query por posición, por lo que tanto el
-orden como los parámetros intermedios `original_file`/`disable_exit` son
-necesarios para que `show_original` llegue al argumento correcto.
-`as_file=false` hace que el navegador muestre el archivo en línea en lugar de
-descargarlo; `show_original=true` obliga a OpenEMR a servir el archivo original
-en vez de una miniatura generada, igual que `view_document.php` del portal.
+diálogo de subida) apuntan al visor propio del módulo
+`documents_view.php?document_id=...`, abierto con `target="_blank"` en una pestaña nueva.
+`documents_view.php` sirve el archivo con `Content-Disposition: inline`, el tipo MIME
+real y `X-Content-Type-Options: nosniff`, para que los PDF e imágenes se abran en línea
+en vez de descargarse. Verifica la sesión del paciente activo, la pertenencia del
+documento a ese paciente, el permiso `patients/docs` y el ACL de la categoría mediante
+`Document::can_access()` antes de servir el archivo.
+
+Ya no se usa el endpoint central `controller.php?document&retrieve` para "Ver/Abrir": su
+despacho posicional y el manejo de MIME/CSP del navegador podían forzar la descarga
+incluso con `as_file=false`. El visor del módulo no depende de esa ruta y coincide con
+`view_document.php` del portal.
 
 ### Nota sobre Font Awesome
 
@@ -601,6 +604,31 @@ icono. El diálogo de subida es una página independiente que usa
 `Header::setupHeader(['no_main-theme', 'fontawesome'])`; `fontawesome` no es un
 asset autoload en `config.yaml`, por lo que debe solicitarse explícitamente o
 los iconos de carpeta, subida y ojo aparecen en blanco.
+
+### Informes imprimibles completos (print.php)
+
+Todos los `cards/*/print.php` muestran el registro completo del estudio, no solo
+unos pocos campos. El ecocardiograma (`cards/echo/print.php`) reproduce todas las
+secciones de `_form_fields.php` (Contexto Clínico, VI sistólica/diastólica,
+Aurículas, VD y presión pulmonar, Aorta, Válvulas, Pericardio e Informe), con los
+títulos de `list_options` resueltos para los selects. Las demás cards agregan la
+sección **Study Data** generada por `CardPrintReport::genericSections()`, que itera
+todas las columnas de la fila del estudio (salvo las de sistema) con etiquetas
+humanizadas (`lvedd_mm` → `LVEDD (mm)`) y valores vacíos como `—`.
+
+Paciente y encuentro se cargan con los servicios de OpenEMR,
+`PatientService::findByPid()` y `EncounterService::getOneByPidEid()`
+(misma firma en 8.2.0 y 8.5.0), vía `lib/CardPrintReport.php`, con fallback a
+`patient_data` / `form_encounter` si el servicio no está disponible. Los nombres
+de médico/usuario usan `UserService` (`getUser()` / `getUserByUsername()`) y se
+imprimen como "Apellido, Nombre". La página es A4 vertical con márgenes
+`@page 20mm 15mm 18mm 15mm` y `padding: 4mm` en el cuerpo.
+
+Cada informe muestra una barra solo visible en pantalla con **Imprimir**
+(`window.print()`) y **Descargar PDF** (Dompdf en el servidor vía `?download=1`,
+enviado como `Attachment`). Todos los textos del módulo están en inglés
+(USA Hospital) y pasan por `xl*()`; las traducciones al español viven en
+`sql/lang_custom.sql`, que se ejecuta manualmente como script independiente.
 
 ---
 
@@ -1273,7 +1301,7 @@ Se usa detección de características; no hay comprobaciones por número de vers
 - **`CsrfUtils`** requiere un argumento de sesión en ambas versiones. El módulo centraliza las llamadas en `CardiologyContainer`, que refleja la firma del método para aceptar ambos órdenes de argumentos.
 - **`AclMain`** expone los mismos métodos ACL; 8.5.0 agrega principalmente tipos de retorno.
 - **Accesores de sesión** se resuelven con `CardiologyContainer::getSessionPid()`, que usa las utilidades del núcleo cuando existen y cae a `$_SESSION` / `$GLOBALS`.
-- **URL de recuperación de documentos** se mantiene igual en ambas versiones: `<webroot>/controller.php?document&retrieve&patient_id=…&as_file=false&document_id=…`.
+- **Visor de documentos** propio del módulo en ambas versiones: `documents_view.php?document_id=…` sirve `Content-Disposition: inline` con MIME real en una pestaña nueva, en vez de `controller.php?document&retrieve`.
 
 ### 16.8 Precaución sobre reutilización entre repositorios
 

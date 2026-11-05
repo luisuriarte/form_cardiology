@@ -3,7 +3,7 @@
 /**
  * Fitness card – new.php
  *
- * Renders a blank Cardiology Fitness Certificate (apto cardiológico) form.
+ * Renders a blank Cardiology Fitness Certificate (cardiology fitness certificate) form.
  *
  * Compatible with OpenEMR 8.2.0 – 8.5.0.
  *

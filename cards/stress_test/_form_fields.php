@@ -52,7 +52,7 @@ $secsToMmss = static function (?string $secs): string {
 </div>
 <?php endif; ?>
 
-<!-- Sección 1: Contexto clínico -->
+<!-- Section 1: Clinical Context -->
 <fieldset class="mb-4">
 <legend class="cardiology-section-title"><?php echo xlt('Clinical Context'); ?></legend>
 <div class="row g-2">
@@ -132,7 +132,7 @@ $secsToMmss = static function (?string $secs): string {
 </div>
 </fieldset>
 
-<!-- Sección 2: Valores basales -->
+<!-- Section 2: Baseline values -->
 <fieldset class="mb-4">
 <legend class="cardiology-section-title"><?php echo xlt('Baseline Values'); ?></legend>
 <div class="row g-2">
@@ -157,7 +157,7 @@ $secsToMmss = static function (?string $secs): string {
 </div>
 </fieldset>
 
-<!-- Sección 3: Performance -->
+<!-- Section 3: Performance -->
 <fieldset class="mb-4">
 <legend class="cardiology-section-title"><?php echo xlt('Exercise Performance'); ?></legend>
 <div class="row g-2">
@@ -242,7 +242,7 @@ $secsToMmss = static function (?string $secs): string {
 </div>
 </fieldset>
 
-<!-- Sección 4: Síntomas, ST y arritmias -->
+<!-- Section 4: Symptoms, ST and arrhythmias -->
 <fieldset class="mb-4">
 <legend class="cardiology-section-title"><?php echo xlt('Symptoms, ST Segment & Arrhythmias'); ?></legend>
 <div class="row g-2">
@@ -312,7 +312,7 @@ $secsToMmss = static function (?string $secs): string {
 </div>
 </fieldset>
 
-<!-- Sección 5: Resultado -->
+<!-- Section 5: Result -->
 <fieldset class="mb-4">
 <legend class="cardiology-section-title"><?php echo xlt('Result'); ?></legend>
 <div class="row g-2">
@@ -360,7 +360,7 @@ $secsToMmss = static function (?string $secs): string {
 </div>
 </fieldset>
 
-<!-- Sección 6: Etapas -->
+<!-- Section 6: Stages -->
 <fieldset class="mb-4">
 <legend class="cardiology-section-title"><?php echo xlt('Stage-by-Stage Records'); ?></legend>
 <?php if (!$readOnly) : ?>

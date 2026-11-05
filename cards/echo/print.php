@@ -3,7 +3,12 @@
 /**
  * Echo card – print.php (modernized)
  *
- * Renders a clean, printable report for a Doppler Echocardiogram study.
+ * Renders a complete printable report for a Doppler Echocardiogram study,
+ * mirroring every section of _form_fields.php (Clinical Context, LV systolic
+ * and diastolic function, atria, RV/pulmonary pressure, aorta, valves,
+ * pericardium, report). Patient and encounter data come from OpenEMR's
+ * PatientService / EncounterService via CardPrintReport.
+ *
  * Opens in a new tab (target="_blank"). No OpenEMR navigation chrome.
  *
  * GET parameters:
@@ -26,9 +31,11 @@ require_once('../../../../globals.php');
 require_once($GLOBALS['srcdir'] . '/api.inc.php');
 require_once(__DIR__ . '/../../lib/CardiologyContainer.php');
 require_once(__DIR__ . '/../../lib/CardSettings.php');
+require_once(__DIR__ . '/../../lib/CardPrintReport.php');
 
 use OpenEMR\Common\Acl\AclMain;
 use OpenEMR\Forms\Cardiology\CardiologyContainer;
+use OpenEMR\Forms\Cardiology\CardPrintReport;
 
 // ---------------------------------------------------------------------------
 // Institutional logo for printable reports (Dompdf-safe data URI)
@@ -61,16 +68,19 @@ if (!$study || !isset($study['id'])) {
     die(xlt('Study not found or has been deleted.'));
 }
 
-// ---- Additional fields (echo specific) ----
-$views = sqlQuery(
-    'SELECT * FROM `form_card_echo` WHERE id = ? LIMIT 1',
-    [$studyId]
-);
-$ejectionFraction = (float)($views['ef'] ?? 0);
-$leftVentricleEndDiastolic = (float)($views['lvedd'] ?? 0);
-$leftVentricleEndSystolic  = (float)($views['lveds'] ?? 0);
-$pap                  = (float)($views['pap'] ?? 0);
-$aorticRoot = (float)($views['aortic_root'] ?? 0);
+$encounter = (int)($study['encounter'] ?? $encounter);
+$status    = (string)($study['status'] ?? '');
+
+// Patient + encounter data via OpenEMR services (PatientService / EncounterService).
+$patient   = CardPrintReport::patient($pid);
+$encounterRow = CardPrintReport::encounter($pid, $encounter);
+
+$fv = static function (string $key) use ($study): string {
+    return CardPrintReport::formatValue($study[$key] ?? null);
+};
+$fl = static function (string $key, string $listId = '') use ($study): string {
+    return CardPrintReport::formatValue($study[$key] ?? null, $listId !== '' ? $listId : null);
+};
 
 // ---- Build HTML for Dompdf ----
 ob_start();
@@ -79,174 +89,14 @@ ob_start();
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title><?= htmlspecialchars($study['study_title'] ?? 'Informe Ecocardiograma') ?> - OpenEMR</title>
+    <title><?= htmlspecialchars(xlt('Doppler Echocardiogram Report')) ?> - OpenEMR</title>
     <style>
-        @page {
-            margin: 18mm 15mm 16mm 15mm;
-            size: A4 portrait;
-        }
-        body {
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            font-size: 12px;
-            color: #1e293b;
-            line-height: 1.5;
-            margin: 0;
-            padding: 0;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-        }
-        .header {
-            display: table;
-            width: 100%;
-            table-layout: fixed;
-            border-bottom: 2px solid #e2e8f0;
-            padding-bottom: 8px;
-            margin-bottom: 14px;
-        }
-        .header-left,
-        .header-right {
-            display: table-cell;
-            vertical-align: middle;
-        }
-        .header-left {
-            width: 62%;
-        }
-        .header-right {
-            width: 38%;
-            text-align: right;
-            color: #64748b;
-            font-size: 11px;
-        }
-        .header-right .sub {
-            font-size: 10.5px;
-        }
-        .logo {
-            text-align: center;
-            margin-bottom: 9px;
-        }
-        .logo img {
-            max-height: 90px;
-            max-width: 320px;
-            height: auto;
-            display: inline-block;
-        }
-        .clinic-name {
-            font-size: 20px;
-            font-weight: bold;
-            color: #0f172a;
-            text-transform: uppercase;
-            margin: 0;
-        }
-        .clinic-sub {
-            font-size: 10.5px;
-            color: #64748b;
-            margin: 2px 0 0 0;
-        }
-        .report-title {
-            text-align: center;
-            background-color: #f0f9ff;
-            border: 1px solid #bae6fd;
-            color: #0369a1;
-            font-size: 15px;
-            font-weight: bold;
-            letter-spacing: 0.5px;
-            padding: 7px 10px;
-            margin: 12px 0 14px 0;
-            border-radius: 4px;
-            text-transform: uppercase;
-        }
-        .patient-box {
-            width: 100%;
-            border: 1px solid #cbd5e1;
-            background-color: #f8fafc;
-            border-radius: 4px;
-            margin-bottom: 12px;
-            border-collapse: collapse;
-        }
-        .patient-box td {
-            padding: 5px 8px;
-            font-size: 12px;
-            vertical-align: top;
-        }
-        .patient-box td.label {
-            font-weight: bold;
-            color: #475569;
-            width: 20%;
-        }
-        .patient-box td.val {
-            color: #0f172a;
-            width: 40%;
-        }
-        .section-title {
-            page-break-after: avoid;
-            font-size: 13px;
-            font-weight: bold;
-            color: #0369a1;
-            border-bottom: 1px solid #e2e8f0;
-            padding-bottom: 3px;
-            margin-top: 12px;
-            margin-bottom: 6px;
-            text-transform: uppercase;
-        }
-        .report-text {
-            font-size: 12px;
-            color: #334155;
-            line-height: 1.55;
-            background-color: #ffffff;
-            padding: 7px 9px;
-            border: 1px solid #f1f5f9;
-            border-radius: 3px;
-            margin-bottom: 6px;
-        }
-        .results-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 4px;
-            margin-bottom: 6px;
-        }
-        .results-table th {
-            background-color: #1e293b;
-            color: #ffffff;
-            font-size: 10.5px;
-            font-weight: bold;
-            text-transform: uppercase;
-            padding: 6px 8px;
-            text-align: left;
-            border: 1px solid #1e293b;
-        }
-        .results-table td {
-            padding: 5px 8px;
-            font-size: 12px;
-            border-bottom: 1px solid #e2e8f0;
-            border-left: 1px solid #f8fafc;
-            border-right: 1px solid #f8fafc;
-        }
-        .results-table tr:nth-child(even) {
-            background-color: #f8fafc;
-        }
-        .echocardiogram-parameter {
-            display: flex;
-            justify-content: space-between;
-            margin: 4px 0;
-            font-size: 12px;
-        }
-        .echocardiogram-parameter .label {
-            color: #64748b;
-        }
-        .echocardiogram-parameter .value {
-            color: #0f172a;
-            font-weight: 500;
-        }
-        .disclaimer {
-            page-break-inside: avoid;
-            font-size: 9.5px;
-            color: #94a3b8;
-            text-align: center;
-            margin-top: 18px;
-        }
+        <?= CardPrintReport::style() ?>
     </style>
 </head>
 <body>
+
+    <?= CardPrintReport::toolbarHtml() ?>
 
     <!-- Institutional Logo + Header -->
     <?php if ($logoBase64): ?>
@@ -261,54 +111,127 @@ ob_start();
             <div class="clinic-sub"><?= defined('CLINIC_WEB') && CLINIC_WEB ? 'Web: ' . CLINIC_WEB : '' ?></div>
         </div>
         <div class="header-right">
-            <div class="sub"><?= xlt('BIOCHEMISTRY & DIAGNOSTIC SERVICE') ?></div>
-            <div class="sub"><?= xlt('Unified Electronic Protocol') ?></div>
-            <div class="sub" style="margin-top: 2px;"><?= xlt('Issue Date') ?>: <?= date('d/m/Y H:i:s') ?></div>
+            <div><?= xlt('BIOCHEMISTRY & DIAGNOSTIC SERVICE') ?></div>
+            <div><?= xlt('Unified Electronic Protocol') ?></div>
+            <div style="margin-top: 2px;"><?= xlt('Issue Date') ?>: <?= date('d/m/Y H:i:s') ?></div>
         </div>
     </div>
 
     <!-- Report Title -->
-    <div class="report-title">
-        <?= htmlspecialchars(xlt('ECHOCARDIOGRAM REPORT')) ?>
-        <?php if (!empty($study['encounter_label'])): ?>
-            - <?= htmlspecialchars($study['encounter_label']) ?> (<?= xlt('DATE') ?>: <?= htmlspecialchars($study['batch_date_formatted'] ?? '') ?>)
+    <div class="report-title"><?= htmlspecialchars(xlt('Doppler Echocardiogram Report')) ?></div>
+    <div class="report-meta">
+        <?= xlt('Encounter') ?>: <?= $encounter > 0 ? $encounter : '—' ?>
+        &mdash; <?= xlt('Study') ?> #<?= $studyId ?>
+        <?php if (!empty($study['user'])) : ?>
+        &mdash; <?= htmlspecialchars(CardPrintReport::userDisplayName((string)$study['user'])) ?>
         <?php endif; ?>
+        &mdash; <?= $status === 'final' ? xlt('Final') : xlt('Draft') ?>
     </div>
 
-    <!-- Patient Card -->
-    <table class="patient-box">
-        <tr>
-            <td class="label"><?= xlt('Patient') ?>:</td>
-            <td class="val"><strong><?= htmlspecialchars($study['patient_name'] ?? '') ?></strong></td>
-            <td class="label"><?= xlt('Medical Record / PID') ?>:</td>
-            <td class="val">#<?= htmlspecialchars((string)$study['pid']) ?></td>
-        </tr>
-        <tr>
-            <td class="label"><?= xlt('ID / Document') ?>:</td>
-            <td class="val"><?= htmlspecialchars($study['patient_dni'] ?? '') ?></td>
-            <td class="label"><?= xlt('Age / Sex') ?>:</td>
-            <td class="val"><?= htmlspecialchars($study['patient_age'] ?? '') ?> / <?= htmlspecialchars($study['patient_sex'] ?? '') ?></td>
-        </tr>
-        <tr>
-            <td class="label"><?= xlt('Requesting Physician') ?>:</td>
-            <td class="val" colspan="3"><?= htmlspecialchars($study['requesting_physician'] ?? xlt('Service Physicians')) ?></td>
-        </tr>
-    </table>
+    <!-- Patient + Encounter (OpenEMR PatientService / EncounterService) -->
+    <?= CardPrintReport::patientEncounterTable($study, $patient, $encounterRow, $pid, $encounter, $studyId) ?>
 
-    <!-- Echocardiogram Parameters -->
-    <div class="section-title"><?= xlt('Echocardiogram Parameters') ?></div>
-    <table width="100%" style="font-size: 12px; border-collapse: collapse;">
-        <tr>
-            <td style="width: 40%; padding: 2px 0;"><strong><?= xlt('Ejection Fraction') ?>:</strong> <?= number_format($ejectionFraction, 1) ?> %</td>
-            <td style="width: 30%; padding: 2px 0;"><strong><?= xlt('LVIDd') ?>:</strong> <?= number_format($leftVentricleEndDiastolic, 1) ?> mm</td>
-            <td style="width: 30%; padding: 2px 0;"><strong><?= xlt('LVIDs') ?>:</strong> <?= number_format($leftVentricleEndSystolic, 1) ?> mm</td>
-        </tr>
-        <tr>
-            <td style="width: 40%; padding: 2px 0;"><strong><?= xlt('PAP') ?>:</strong> <?= number_format($pap, 1) ?> mmHg</td>
-            <td style="width: 30%; padding: 2px 0;"><strong><?= xlt('Ao Root') ?>:</strong> <?= number_format($aorticRoot, 1) ?> mm</td>
-            <td style="width: 30%; padding: 2px 0;">&nbsp;</td>
-        </tr>
-    </table>
+    <?php if ($status === 'final') : ?>
+    <div class="report-text" style="border:1px solid #bae6fd;background:#f0f9ff;">
+        <?= xlt('This study is finalized and cannot be edited.') ?>
+    </div>
+    <?php endif; ?>
+
+    <!-- Clinical Context -->
+    <?= CardPrintReport::section(xlt('Clinical Context'), [
+        [xlt('Study Date'), $fv('study_date')],
+        [xlt('Indication'), $fv('indication')],
+        [xlt('Height (cm)'), $fv('height_cm')],
+        [xlt('Weight (kg)'), $fv('weight_kg')],
+        [xlt('BSA (m²)'), $fv('bsa_m2')],
+        [xlt('Heart Rate (bpm)'), $fv('heart_rate_bpm')],
+        [xlt('BP Systolic (mmHg)'), $fv('bp_systolic_mmhg')],
+        [xlt('BP Diastolic (mmHg)'), $fv('bp_diastolic_mmhg')],
+    ]) ?>
+
+    <!-- Left Ventricle – Dimensions & Systolic Function -->
+    <?= CardPrintReport::section(xlt('Left Ventricle – Dimensions & Systolic Function'), [
+        [xlt('LVEDD (mm)'), $fv('lvedd_mm')],
+        [xlt('LVESD (mm)'), $fv('lvesd_mm')],
+        [xlt('IVS (mm)'), $fv('ivs_mm')],
+        [xlt('PW (mm)'), $fv('pw_mm')],
+        [xlt('LVEDV (mL)'), $fv('lvedv_ml')],
+        [xlt('LVESV (mL)'), $fv('lvesv_ml')],
+        [xlt('LVEF (%)'), $fv('lvef_pct')],
+        [xlt('LV Mass (g)'), $fv('lv_mass_g')],
+        [xlt('LV Mass Index (g/m²)'), $fv('lv_mass_index_g_m2')],
+        [xlt('LVEF Method'), $fl('lvef_method', 'card_ef_method')],
+        [xlt('Global Wall Motion'), $fl('wall_motion', 'card_wall_motion')],
+        [xlt('Segmental Wall Motion Detail'), $fv('wall_motion_detail')],
+    ]) ?>
+
+    <!-- Left Ventricle – Diastolic Function -->
+    <?= CardPrintReport::section(xlt('Left Ventricle – Diastolic Function'), [
+        [xlt('Mitral E (cm/s)'), $fv('mitral_e_cm_s')],
+        [xlt('Mitral A (cm/s)'), $fv('mitral_a_cm_s')],
+        [xlt('E/A Ratio'), $fv('mitral_e_a_ratio')],
+        [xlt('Dec. Time (ms)'), $fv('dec_time_ms')],
+        [xlt("e' Septal (cm/s)"), $fv('e_prime_septal_cm_s')],
+        [xlt("e' Lateral (cm/s)"), $fv('e_prime_lateral_cm_s')],
+        [xlt("E/e' Ratio"), $fv('e_e_prime_ratio')],
+    ]) ?>
+
+    <!-- Atria -->
+    <?= CardPrintReport::section(xlt('Atria'), [
+        [xlt('LA Diameter (mm)'), $fv('la_diameter_mm')],
+        [xlt('LA Volume Index (mL/m²)'), $fv('la_volume_index_ml_m2')],
+        [xlt('RA Area (cm²)'), $fv('ra_area_cm2')],
+    ]) ?>
+
+    <!-- Right Ventricle & Pulmonary Pressure -->
+    <?= CardPrintReport::section(xlt('Right Ventricle & Pulmonary Pressure'), [
+        [xlt('RV Basal Diam. (mm)'), $fv('rv_basal_diameter_mm')],
+        [xlt('TAPSE (mm)'), $fv('tapse_mm')],
+        [xlt("RV S' (cm/s)"), $fv('rv_s_prime_cm_s')],
+        [xlt('IVC Diameter (mm)'), $fv('ivc_diameter_mm')],
+        [xlt('RAP (mmHg)'), $fv('rap_mmhg')],
+        [xlt('TR Peak Vel. (m/s)'), $fv('tr_peak_velocity_m_s')],
+        [xlt('PASP (mmHg)'), $fv('pasp_mmhg')],
+    ]) ?>
+
+    <!-- Aorta -->
+    <?= CardPrintReport::section(xlt('Aorta'), [
+        [xlt('Aortic Root (mm)'), $fv('ao_root_mm')],
+        [xlt('Ascending Aorta (mm)'), $fv('asc_aorta_mm')],
+    ]) ?>
+
+    <!-- Valves -->
+    <?= CardPrintReport::section(xlt('Aortic Valve'), [
+        [xlt('Regurgitation'), $fl('ao_regurg_grade', 'card_valve_grade')],
+        [xlt('Stenosis'), $fl('ao_stenosis_grade', 'card_valve_grade')],
+        [xlt('Peak Vel. (m/s)'), $fv('ao_peak_velocity_m_s')],
+        [xlt('Mean Gradient (mmHg)'), $fv('ao_mean_gradient_mmhg')],
+        [xlt('Valve Area (cm²)'), $fv('ao_valve_area_cm2')],
+    ]) ?>
+    <?= CardPrintReport::section(xlt('Mitral Valve'), [
+        [xlt('Regurgitation'), $fl('mv_regurg_grade', 'card_valve_grade')],
+        [xlt('Stenosis'), $fl('mv_stenosis_grade', 'card_valve_grade')],
+        [xlt('Mean Gradient (mmHg)'), $fv('mv_mean_gradient_mmhg')],
+        [xlt('Valve Area (cm²)'), $fv('mv_valve_area_cm2')],
+    ]) ?>
+    <?= CardPrintReport::section(xlt('Tricuspid & Pulmonary Valves'), [
+        [xlt('Tricuspid Regurgitation'), $fl('tv_regurg_grade', 'card_valve_grade')],
+        [xlt('Pulmonary Regurgitation'), $fl('pv_regurg_grade', 'card_valve_grade')],
+    ]) ?>
+    <?= CardPrintReport::section(xlt('Additional Valve Findings'), [
+        [xlt('Additional Valve Findings'), $fv('valve_findings')],
+    ], 1, true) ?>
+
+    <!-- Pericardium -->
+    <?= CardPrintReport::section(xlt('Pericardium'), [
+        [xlt('Pericardial Effusion'), $fl('pericardial_effusion', 'card_effusion_grade')],
+    ]) ?>
+
+    <!-- Report -->
+    <?= CardPrintReport::section(xlt('Report'), [
+        [xlt('Conclusion'), $fv('conclusion')],
+        [xlt('Comments'), $fv('comments')],
+    ], 1, true) ?>
 
     <!-- Disclaimer -->
     <div class="disclaimer">
@@ -317,5 +240,13 @@ ob_start();
 </body>
 </html>
 <?php
-// Send to Dompdf (OpenEMR handles the conversion)
+// Download as a real PDF file when ?download=1 (Dompdf, server-side).
+// Otherwise the buffered HTML is flushed and shown in the browser.
+if (($_GET['download'] ?? '') === '1') {
+    $reportHtml = (string)ob_get_clean();
+    CardPrintReport::downloadPdf(
+        $reportHtml,
+        'Echocardiogram_study_' . $studyId . '_encounter_' . $encounter . '.pdf'
+    );
+}
 ?>

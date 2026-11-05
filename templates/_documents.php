@@ -72,8 +72,8 @@ $apiUrl           = CardiologyContainer::getFormRootUrl() . '/documents_api.php'
 $uploadUrl        = CardiologyContainer::getFormRootUrl() . '/documents_upload.php';
 // Keep OpenEMR's positional retrieve arguments in order: patient_id,
 // document_id, as_file, original_file, disable_exit, show_original.
-$retrieveUrlBase     = $GLOBALS['webroot'] . '/controller.php?document&retrieve&patient_id=' . urlencode((string)$pid) . '&document_id=';
-$retrieveUrlSuffix   = '&as_file=false&original_file=true&disable_exit=false&show_original=true';
+$retrieveUrlBase     = CardiologyContainer::getFormRootUrl() . '/documents_view.php?document_id=';
+$retrieveUrlSuffix   = '';
 $maxUploadBytes   = CardDocuments::getMaxUploadBytes();
 $maxUploadText    = CardDocuments::formatBytes($maxUploadBytes);
 $allowedExts      = CardDocuments::ALLOWED_EXTENSIONS;
