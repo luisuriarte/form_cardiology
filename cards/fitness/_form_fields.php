@@ -16,6 +16,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../lib/CardDate.php';
+
 $disabled = $readOnly ? 'disabled' : '';
 
 function fitFld(string $name, ?array $study, string $default = ''): string
@@ -23,10 +25,7 @@ function fitFld(string $name, ?array $study, string $default = ''): string
     return htmlspecialchars((string)($study[$name] ?? $default), ENT_QUOTES, 'UTF-8');
 }
 
-$studyDateVal = fitFld('study_date', $study, date('Y-m-d\TH:i'));
-if (strpos($studyDateVal, ' ') !== false) {
-    $studyDateVal = str_replace(' ', 'T', substr($studyDateVal, 0, 16));
-}
+$studyDateVal = fitFld('study_date', $study, date('Y-m-d H:i:s'));
 
 $validUntilVal = fitFld('valid_until', $study, date('Y-m-d', strtotime('+12 months')));
 ?>
@@ -45,11 +44,11 @@ $validUntilVal = fitFld('valid_until', $study, date('Y-m-d', strtotime('+12 mont
                 <label for="study_date" class="form-label required">
                     <?php echo xlt('Evaluation Date & Time'); ?>
                 </label>
-                <input type="datetime-local"
-                       class="form-control form-control-sm"
+                <input type="text"
+                       class="datetimepicker form-control form-control-sm"
                        id="study_date"
                        name="study_date"
-                       value="<?php echo attr($studyDateVal); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayDateTime($studyDateVal)); ?>"
                        required
                        <?php echo $disabled; ?>>
             </div>
@@ -278,11 +277,11 @@ $validUntilVal = fitFld('valid_until', $study, date('Y-m-d', strtotime('+12 mont
                     <span class="text-danger">*</span>
                     <span class="small text-muted ms-1">(<?php echo xlt('Required to finalize'); ?>)</span>
                 </label>
-                <input type="date"
-                       class="form-control form-control-sm"
+                <input type="text"
+                       class="datepicker form-control form-control-sm"
                        id="valid_until"
                        name="valid_until"
-                       value="<?php echo attr($validUntilVal); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayDate($validUntilVal)); ?>"
                        <?php echo $disabled; ?>>
             </div>
             <div class="col-12" id="restrictions_group">
@@ -325,3 +324,13 @@ $validUntilVal = fitFld('valid_until', $study, date('Y-m-d', strtotime('+12 mont
     </div>
 </div>
 
+<script>
+$(function () {
+    $('.datepicker').datetimepicker({
+        <?php $datetimepicker_timepicker = false; $datetimepicker_showseconds = false; $datetimepicker_formatInput = true; require(\OpenEMR\Core\OEGlobalsBag::getInstance()->getSrcDir() . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); unset($datetimepicker_timepicker, $datetimepicker_showseconds, $datetimepicker_formatInput); ?>
+    });
+    $('.datetimepicker').datetimepicker({
+        <?php $datetimepicker_timepicker = true; $datetimepicker_showseconds = false; $datetimepicker_formatInput = true; require(\OpenEMR\Core\OEGlobalsBag::getInstance()->getSrcDir() . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); unset($datetimepicker_timepicker, $datetimepicker_showseconds, $datetimepicker_formatInput); ?>
+    });
+});
+</script>

@@ -60,9 +60,9 @@ $dis = $readOnly ? ' disabled' : '';
         <label class="form-label" for="echo_study_date">
             <?php echo xlt('Study Date'); ?> <span class="text-danger">*</span>
         </label>
-        <input type="datetime-local" id="echo_study_date" name="study_date"
-               class="form-control form-control-sm"
-               value="<?php echo attr(str_replace(' ', 'T', $fv('study_date'))); ?>"
+        <input type="text" id="echo_study_date" name="study_date"
+               class="datetimepicker form-control form-control-sm"
+               value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayDateTime($study['study_date'] ?? null)); ?>"
                required <?php echo $dis; ?>>
     </div>
     <div class="col-12 col-md-8">
@@ -459,3 +459,14 @@ $dis = $readOnly ? ' disabled' : '';
     </div>
 </div>
 </fieldset>
+
+<script>
+$(function () {
+    $('.datepicker').datetimepicker({
+        <?php $datetimepicker_timepicker = false; $datetimepicker_showseconds = false; $datetimepicker_formatInput = true; require(\OpenEMR\Core\OEGlobalsBag::getInstance()->getSrcDir() . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); unset($datetimepicker_timepicker, $datetimepicker_showseconds, $datetimepicker_formatInput); ?>
+    });
+    $('.datetimepicker').datetimepicker({
+        <?php $datetimepicker_timepicker = true; $datetimepicker_showseconds = false; $datetimepicker_formatInput = true; require(\OpenEMR\Core\OEGlobalsBag::getInstance()->getSrcDir() . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); unset($datetimepicker_timepicker, $datetimepicker_showseconds, $datetimepicker_formatInput); ?>
+    });
+});
+</script>

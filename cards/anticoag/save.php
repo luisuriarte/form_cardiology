@@ -87,21 +87,7 @@ function anticoagRenderError(string $message, string $backUrl): void
  */
 function anticoagDate(mixed $value, string $field): ?string
 {
-    if ($value === null) {
-        return null;
-    }
-
-    $raw = trim((string)$value);
-    if ($raw === '') {
-        return null;
-    }
-
-    $dt = \DateTime::createFromFormat('Y-m-d', $raw);
-    if (!$dt || $dt->format('Y-m-d') !== $raw) {
-        throw new \InvalidArgumentException(sprintf(xlt('Invalid date format in field %s. Expected Y-m-d'), $field));
-    }
-
-    return $raw;
+    return \OpenEMR\Forms\Cardiology\CardDate::parseDate($value, $field);
 }
 
 // ---------------------------------------------------------------------------

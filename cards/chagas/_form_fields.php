@@ -23,6 +23,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../lib/CardDate.php';
+
 $disabled = $readOnly ? 'disabled' : '';
 
 function chagasFld(string $name, ?array $study, string $default = ''): string
@@ -62,10 +64,7 @@ function chagasSelect(
     <?php
 }
 
-$studyDateVal = chagasFld('study_date', $study, date('Y-m-d\TH:i'));
-if (strpos($studyDateVal, ' ') !== false) {
-    $studyDateVal = str_replace(' ', 'T', substr($studyDateVal, 0, 16));
-}
+$studyDateVal = chagasFld('study_date', $study, date('Y-m-d H:i:s'));
 ?>
 
 <!-- ======================================================================= -->
@@ -82,11 +81,11 @@ if (strpos($studyDateVal, ' ') !== false) {
                 <label for="study_date" class="form-label required">
                     <?php echo xlt('Study Date & Time'); ?>
                 </label>
-                <input type="datetime-local"
-                       class="form-control form-control-sm"
+                <input type="text"
+                       class="datetimepicker form-control form-control-sm"
                        id="study_date"
                        name="study_date"
-                       value="<?php echo attr($studyDateVal); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayDateTime($studyDateVal)); ?>"
                        required
                        <?php echo $disabled; ?>>
             </div>
@@ -176,11 +175,11 @@ if (strpos($studyDateVal, ' ') !== false) {
                 <label for="serology_<?php echo $i; ?>_date" class="form-label">
                     <?php echo xlt('Serology Date'); ?> <?php echo text((string)$i); ?>
                 </label>
-                <input type="date"
-                       class="form-control form-control-sm"
+                <input type="text"
+                       class="datepicker form-control form-control-sm"
                        id="serology_<?php echo $i; ?>_date"
                        name="serology_<?php echo $i; ?>_date"
-                       value="<?php echo attr(chagasDateValue('serology_' . $i . '_date', $study)); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayDate(chagasDateValue('serology_' . $i . '_date', $study))); ?>"
                        <?php echo $disabled; ?>>
             </div>
         </div>
@@ -268,11 +267,11 @@ if (strpos($studyDateVal, ' ') !== false) {
                 <label for="ecg_date" class="form-label">
                     <?php echo xlt('ECG Date'); ?>
                 </label>
-                <input type="date"
-                       class="form-control form-control-sm"
+                <input type="text"
+                       class="datepicker form-control form-control-sm"
                        id="ecg_date"
                        name="ecg_date"
-                       value="<?php echo attr(chagasDateValue('ecg_date', $study)); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayDate(chagasDateValue('ecg_date', $study))); ?>"
                        <?php echo $disabled; ?>>
             </div>
             <div class="col-md-3">
@@ -403,11 +402,11 @@ if (strpos($studyDateVal, ' ') !== false) {
                 <label for="chest_xray_date" class="form-label">
                     <?php echo xlt('Chest X-ray Date'); ?>
                 </label>
-                <input type="date"
-                       class="form-control form-control-sm"
+                <input type="text"
+                       class="datepicker form-control form-control-sm"
                        id="chest_xray_date"
                        name="chest_xray_date"
-                       value="<?php echo attr(chagasDateValue('chest_xray_date', $study)); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayDate(chagasDateValue('chest_xray_date', $study))); ?>"
                        <?php echo $disabled; ?>>
             </div>
             <div class="col-md-3">
@@ -458,11 +457,11 @@ if (strpos($studyDateVal, ' ') !== false) {
                 <label for="echo_date" class="form-label">
                     <?php echo xlt('Echocardiogram Date'); ?>
                 </label>
-                <input type="date"
-                       class="form-control form-control-sm"
+                <input type="text"
+                       class="datepicker form-control form-control-sm"
                        id="echo_date"
                        name="echo_date"
-                       value="<?php echo attr(chagasDateValue('echo_date', $study)); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayDate(chagasDateValue('echo_date', $study))); ?>"
                        <?php echo $disabled; ?>>
             </div>
             <div class="col-md-3">
@@ -703,22 +702,22 @@ if (strpos($studyDateVal, ' ') !== false) {
                 <label for="treatment_start_date" class="form-label">
                     <?php echo xlt('Treatment Start Date'); ?>
                 </label>
-                <input type="date"
-                       class="form-control form-control-sm"
+                <input type="text"
+                       class="datepicker form-control form-control-sm"
                        id="treatment_start_date"
                        name="treatment_start_date"
-                       value="<?php echo attr(chagasDateValue('treatment_start_date', $study)); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayDate(chagasDateValue('treatment_start_date', $study))); ?>"
                        <?php echo $disabled; ?>>
             </div>
             <div class="col-md-6">
                 <label for="treatment_end_date" class="form-label">
                     <?php echo xlt('Treatment End Date'); ?>
                 </label>
-                <input type="date"
-                       class="form-control form-control-sm"
+                <input type="text"
+                       class="datepicker form-control form-control-sm"
                        id="treatment_end_date"
                        name="treatment_end_date"
-                       value="<?php echo attr(chagasDateValue('treatment_end_date', $study)); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayDate(chagasDateValue('treatment_end_date', $study))); ?>"
                        <?php echo $disabled; ?>>
             </div>
         </div>
@@ -766,11 +765,11 @@ if (strpos($studyDateVal, ' ') !== false) {
                 <label for="report_date" class="form-label">
                     <?php echo xlt('Reporting Date'); ?>
                 </label>
-                <input type="date"
-                       class="form-control form-control-sm"
+                <input type="text"
+                       class="datepicker form-control form-control-sm"
                        id="report_date"
                        name="report_date"
-                       value="<?php echo attr(chagasDateValue('report_date', $study)); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayDate(chagasDateValue('report_date', $study))); ?>"
                        <?php echo $disabled; ?>>
             </div>
             <div class="col-md-3">
@@ -829,11 +828,11 @@ if (strpos($studyDateVal, ' ') !== false) {
                 <label for="next_control_date" class="form-label">
                     <?php echo xlt('Next Control Date'); ?>
                 </label>
-                <input type="date"
-                       class="form-control form-control-sm"
+                <input type="text"
+                       class="datepicker form-control form-control-sm"
                        id="next_control_date"
                        name="next_control_date"
-                       value="<?php echo attr(chagasDateValue('next_control_date', $study)); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayDate(chagasDateValue('next_control_date', $study))); ?>"
                        <?php echo $disabled; ?>>
             </div>
             <div class="col-12">
@@ -874,3 +873,14 @@ if (strpos($studyDateVal, ' ') !== false) {
         </div>
     </div>
 </div>
+
+<script>
+$(function () {
+    $('.datepicker').datetimepicker({
+        <?php $datetimepicker_timepicker = false; $datetimepicker_showseconds = false; $datetimepicker_formatInput = true; require(\OpenEMR\Core\OEGlobalsBag::getInstance()->getSrcDir() . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); unset($datetimepicker_timepicker, $datetimepicker_showseconds, $datetimepicker_formatInput); ?>
+    });
+    $('.datetimepicker').datetimepicker({
+        <?php $datetimepicker_timepicker = true; $datetimepicker_showseconds = false; $datetimepicker_formatInput = true; require(\OpenEMR\Core\OEGlobalsBag::getInstance()->getSrcDir() . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); unset($datetimepicker_timepicker, $datetimepicker_showseconds, $datetimepicker_formatInput); ?>
+    });
+});
+</script>

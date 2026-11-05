@@ -113,7 +113,7 @@ ob_start();
         <div class="header-right">
             <div><?= xlt('BIOCHEMISTRY & DIAGNOSTIC SERVICE') ?></div>
             <div><?= xlt('Unified Electronic Protocol') ?></div>
-            <div style="margin-top: 2px;"><?= xlt('Issue Date') ?>: <?= date('d/m/Y H:i:s') ?></div>
+            <div style="margin-top: 2px;"><?= xlt('Issue Date') ?>: <?= \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue(date('Y-m-d H:i:s')) ?></div>
         </div>
     </div>
 
@@ -239,7 +239,7 @@ ob_start();
 
     <!-- Disclaimer -->
     <div class="disclaimer">
-        <?= xlt('Report generated on') ?>: <?= date('d/m/Y H:i:s') ?> | <?= xlt('OpenEMR') ?>
+        <?= xlt('Report generated on') ?>: <?= \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue(date('Y-m-d H:i:s')) ?> | <?= xlt('OpenEMR') ?>
     </div>
 </body>
 </html>

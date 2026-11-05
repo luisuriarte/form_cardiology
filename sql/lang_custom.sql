@@ -1316,7 +1316,8 @@ INSERT INTO tmp_card_lang (constant_name, definition) VALUES
 ('Indication for the study', 'Indicación para el estudio'),
 ('Morphology, prostheses, vegetations, etc.', 'Morfología, prótesis, vegetaciones, etc.'),
 ('e.g. Anterior hypokinesia', 'p. ej. hipoquinesia anterior'),
-('Image preview requires the GD extension on the server.', 'La vista previa de imágenes requiere la extensión GD en el servidor.');
+('Image preview requires the GD extension on the server.', 'La vista previa de imágenes requiere la extensión GD en el servidor.'),
+("Field '%s' is required.", "El campo '%s' es obligatorio.");
 
 -- A. Add the source constants that do not exist yet
 INSERT INTO lang_constants (constant_name)

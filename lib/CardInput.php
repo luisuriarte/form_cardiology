@@ -21,6 +21,8 @@ namespace OpenEMR\Forms\Cardiology;
 use DateTime;
 use InvalidArgumentException;
 
+require_once __DIR__ . '/CardDate.php';
+
 final class CardInput
 {
     /**
@@ -125,7 +127,9 @@ final class CardInput
     /**
      * Sanitize and validate a date/time input.
      *
-     * Accepts 'Y-m-d\TH:i', 'Y-m-d H:i:s', 'Y-m-d H:i'.
+     * Accepts the user's configured display format (d/m/Y, m/d/Y, Y-m-d with
+     * 12h/24h time) as well as ISO formats ('Y-m-d\TH:i', 'Y-m-d H:i:s',
+     * 'Y-m-d H:i'). Delegates to CardDate / DateFormatterUtils.
      *
      * @param  mixed  $v     Raw input value.
      * @param  string $field Field name for error reporting.
@@ -134,27 +138,31 @@ final class CardInput
      */
     public static function dateTime(mixed $v, string $field): string
     {
-        if ($v === null) {
-            throw new InvalidArgumentException(sprintf("Field '%s' is required.", $field));
-        }
+        return CardDate::parseDateTime($v, $field);
+    }
 
-        $str = trim((string)$v);
-        if ($str === '') {
-            throw new InvalidArgumentException(sprintf("Field '%s' is required.", $field));
-        }
+    /**
+     * Sanitize and validate an optional date input to 'Y-m-d'.
+     *
+     * Accepts the user's configured display format or ISO.
+     *
+     * @throws InvalidArgumentException If non-empty and invalid.
+     */
+    public static function date(mixed $v, string $field): ?string
+    {
+        return CardDate::parseDate($v, $field);
+    }
 
-        $formats = ['Y-m-d\TH:i', 'Y-m-d H:i:s', 'Y-m-d H:i'];
-        foreach ($formats as $fmt) {
-            $dt = DateTime::createFromFormat($fmt, $str);
-            if ($dt !== false) {
-                $err = DateTime::getLastErrors();
-                if ($err === false || ($err['warning_count'] === 0 && $err['error_count'] === 0)) {
-                    return $dt->format('Y-m-d H:i:s');
-                }
-            }
-        }
-
-        throw new InvalidArgumentException(sprintf("Field '%s' must be a valid date and time.", $field));
+    /**
+     * Sanitize and validate an optional time input to 'H:i:s'.
+     *
+     * Accepts 24h and the configured 12h format.
+     *
+     * @throws InvalidArgumentException If non-empty and invalid.
+     */
+    public static function time(mixed $v, string $field): ?string
+    {
+        return CardDate::parseTime($v, $field);
     }
 
     /**

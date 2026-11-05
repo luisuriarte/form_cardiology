@@ -100,23 +100,7 @@ function holterRenderError(string $message, string $backUrl): void
  */
 function holterTime(mixed $value, string $field): ?string
 {
-    if ($value === null) {
-        return null;
-    }
-
-    $raw = trim((string)$value);
-    if ($raw === '') {
-        return null;
-    }
-
-    foreach (['H:i:s', 'H:i'] as $format) {
-        $dt = \DateTime::createFromFormat($format, $raw);
-        if ($dt !== false && $dt->format($format) === $raw) {
-            return $dt->format('H:i:s');
-        }
-    }
-
-    throw new \InvalidArgumentException(sprintf(xlt('Invalid time format in field %s. Expected HH:MM'), $field));
+    return \OpenEMR\Forms\Cardiology\CardDate::parseTime($value, $field);
 }
 
 // ---------------------------------------------------------------------------

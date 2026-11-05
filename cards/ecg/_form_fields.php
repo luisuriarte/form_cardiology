@@ -21,6 +21,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../lib/CardDate.php';
+
 $disabled = $readOnly ? 'disabled' : '';
 
 function ecgFld(string $name, ?array $study, string $default = ''): string
@@ -28,10 +30,7 @@ function ecgFld(string $name, ?array $study, string $default = ''): string
     return htmlspecialchars((string)($study[$name] ?? $default), ENT_QUOTES, 'UTF-8');
 }
 
-$studyDateVal = ecgFld('study_date', $study, date('Y-m-d\TH:i'));
-if (strpos($studyDateVal, ' ') !== false) {
-    $studyDateVal = str_replace(' ', 'T', substr($studyDateVal, 0, 16));
-}
+$studyDateVal = ecgFld('study_date', $study, date('Y-m-d H:i:s'));
 ?>
 
 <!-- ======================================================================= -->
@@ -48,11 +47,11 @@ if (strpos($studyDateVal, ' ') !== false) {
                 <label for="study_date" class="form-label required">
                     <?php echo xlt('Study Date & Time'); ?>
                 </label>
-                <input type="datetime-local"
-                       class="form-control form-control-sm"
+                <input type="text"
+                       class="datetimepicker form-control form-control-sm"
                        id="study_date"
                        name="study_date"
-                       value="<?php echo attr($studyDateVal); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayDateTime($studyDateVal)); ?>"
                        required
                        <?php echo $disabled; ?>>
             </div>
@@ -374,3 +373,13 @@ if (strpos($studyDateVal, ' ') !== false) {
     </div>
 </div>
 
+<script>
+$(function () {
+    $('.datepicker').datetimepicker({
+        <?php $datetimepicker_timepicker = false; $datetimepicker_showseconds = false; $datetimepicker_formatInput = true; require(\OpenEMR\Core\OEGlobalsBag::getInstance()->getSrcDir() . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); unset($datetimepicker_timepicker, $datetimepicker_showseconds, $datetimepicker_formatInput); ?>
+    });
+    $('.datetimepicker').datetimepicker({
+        <?php $datetimepicker_timepicker = true; $datetimepicker_showseconds = false; $datetimepicker_formatInput = true; require(\OpenEMR\Core\OEGlobalsBag::getInstance()->getSrcDir() . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); unset($datetimepicker_timepicker, $datetimepicker_showseconds, $datetimepicker_formatInput); ?>
+    });
+});
+</script>

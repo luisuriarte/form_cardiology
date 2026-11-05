@@ -89,7 +89,7 @@ $statusClass = $readOnly ? 'bg-success' : 'bg-warning text-dark';
 <html>
 <head>
     <title><?php echo xlt('Ambulatory Blood Pressure Monitoring – View Study'); ?></title>
-    <?php Header::setupHeader('chart'); ?>
+    <?php Header::setupHeader(['chart', 'datetime-picker']); ?>
     <link rel="stylesheet"
           href="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/css/cardiology.css?v=<?php echo attr($GLOBALS['v_js_includes']); ?>">
 </head>

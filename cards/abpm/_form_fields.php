@@ -21,6 +21,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../lib/CardDate.php';
+
 $disabled = $readOnly ? 'disabled' : '';
 
 function abpmFld(string $name, ?array $study, string $default = ''): string
@@ -34,10 +36,7 @@ function abpmTimeValue(string $name, ?array $study): string
     return $value !== '' ? substr($value, 0, 5) : '';
 }
 
-$studyDateVal = abpmFld('study_date', $study, date('Y-m-d\TH:i'));
-if (strpos($studyDateVal, ' ') !== false) {
-    $studyDateVal = str_replace(' ', 'T', substr($studyDateVal, 0, 16));
-}
+$studyDateVal = abpmFld('study_date', $study, date('Y-m-d H:i:s'));
 ?>
 
 <!-- ======================================================================= -->
@@ -54,11 +53,11 @@ if (strpos($studyDateVal, ' ') !== false) {
                 <label for="study_date" class="form-label required">
                     <?php echo xlt('Study Date & Time'); ?>
                 </label>
-                <input type="datetime-local"
-                       class="form-control form-control-sm"
+                <input type="text"
+                       class="datetimepicker form-control form-control-sm"
                        id="study_date"
                        name="study_date"
-                       value="<?php echo attr($studyDateVal); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayDateTime($studyDateVal)); ?>"
                        required
                        <?php echo $disabled; ?>>
             </div>
@@ -166,22 +165,22 @@ if (strpos($studyDateVal, ' ') !== false) {
                 <label for="day_start_time" class="form-label">
                     <?php echo xlt('Daytime Start Time'); ?>
                 </label>
-                <input type="time"
+                <input type="text"
                        class="form-control form-control-sm"
                        id="day_start_time"
                        name="day_start_time"
-                       value="<?php echo attr(abpmTimeValue('day_start_time', $study)); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayTime(abpmTimeValue('day_start_time', $study))); ?>"
                        <?php echo $disabled; ?>>
             </div>
             <div class="col-md-3">
                 <label for="night_start_time" class="form-label">
                     <?php echo xlt('Nighttime Start Time'); ?>
                 </label>
-                <input type="time"
+                <input type="text"
                        class="form-control form-control-sm"
                        id="night_start_time"
                        name="night_start_time"
-                       value="<?php echo attr(abpmTimeValue('night_start_time', $study)); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayTime(abpmTimeValue('night_start_time', $study))); ?>"
                        <?php echo $disabled; ?>>
             </div>
             <div class="col-md-6">
@@ -632,3 +631,14 @@ if (strpos($studyDateVal, ' ') !== false) {
         </div>
     </div>
 </div>
+
+<script>
+$(function () {
+    $('.datepicker').datetimepicker({
+        <?php $datetimepicker_timepicker = false; $datetimepicker_showseconds = false; $datetimepicker_formatInput = true; require(\OpenEMR\Core\OEGlobalsBag::getInstance()->getSrcDir() . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); unset($datetimepicker_timepicker, $datetimepicker_showseconds, $datetimepicker_formatInput); ?>
+    });
+    $('.datetimepicker').datetimepicker({
+        <?php $datetimepicker_timepicker = true; $datetimepicker_showseconds = false; $datetimepicker_formatInput = true; require(\OpenEMR\Core\OEGlobalsBag::getInstance()->getSrcDir() . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); unset($datetimepicker_timepicker, $datetimepicker_showseconds, $datetimepicker_formatInput); ?>
+    });
+});
+</script>

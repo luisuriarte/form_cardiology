@@ -21,6 +21,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../lib/CardDate.php';
+
 $disabled = $readOnly ? 'disabled' : '';
 
 function hfFld(string $name, ?array $study, string $default = ''): string
@@ -28,10 +30,7 @@ function hfFld(string $name, ?array $study, string $default = ''): string
     return htmlspecialchars((string)($study[$name] ?? $default), ENT_QUOTES, 'UTF-8');
 }
 
-$studyDateVal = hfFld('study_date', $study, date('Y-m-d\TH:i'));
-if (strpos($studyDateVal, ' ') !== false) {
-    $studyDateVal = str_replace(' ', 'T', substr($studyDateVal, 0, 16));
-}
+$studyDateVal = hfFld('study_date', $study, date('Y-m-d H:i:s'));
 
 $lvefDateVal = hfFld('lvef_date', $study);
 if (strpos($lvefDateVal, ' ') !== false) {
@@ -53,11 +52,11 @@ if (strpos($lvefDateVal, ' ') !== false) {
                 <label for="study_date" class="form-label required">
                     <?php echo xlt('Study Date & Time'); ?>
                 </label>
-                <input type="datetime-local"
-                       class="form-control form-control-sm"
+                <input type="text"
+                       class="datetimepicker form-control form-control-sm"
                        id="study_date"
                        name="study_date"
-                       value="<?php echo attr($studyDateVal); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayDateTime($studyDateVal)); ?>"
                        required
                        <?php echo $disabled; ?>>
             </div>
@@ -378,12 +377,11 @@ if (strpos($lvefDateVal, ' ') !== false) {
                 <label for="lvef_date" class="form-label">
                     <?php echo xlt('LVEF Measurement Date'); ?>
                 </label>
-                <input type="date"
-                       class="form-control form-control-sm"
+                <input type="text"
+                       class="datepicker form-control form-control-sm"
                        id="lvef_date"
                        name="lvef_date"
-                       max="<?php echo attr(date('Y-m-d')); ?>"
-                       value="<?php echo attr($lvefDateVal); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayDate($lvefDateVal)); ?>"
                        <?php echo $disabled; ?>>
             </div>
             <div class="col-md-3">
@@ -627,11 +625,11 @@ if (strpos($lvefDateVal, ' ') !== false) {
                 <label for="next_control_date" class="form-label">
                     <?php echo xlt('Next Control Date'); ?>
                 </label>
-                <input type="date"
-                       class="form-control form-control-sm"
+                <input type="text"
+                       class="datepicker form-control form-control-sm"
                        id="next_control_date"
                        name="next_control_date"
-                       value="<?php echo attr(hfFld('next_control_date', $study)); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayDate(hfFld('next_control_date', $study))); ?>"
                        <?php echo $disabled; ?>>
             </div>
         </div>
@@ -688,3 +686,14 @@ if (strpos($lvefDateVal, ' ') !== false) {
         </div>
     </div>
 </div>
+
+<script>
+$(function () {
+    $('.datepicker').datetimepicker({
+        <?php $datetimepicker_timepicker = false; $datetimepicker_showseconds = false; $datetimepicker_formatInput = true; require(\OpenEMR\Core\OEGlobalsBag::getInstance()->getSrcDir() . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); unset($datetimepicker_timepicker, $datetimepicker_showseconds, $datetimepicker_formatInput); ?>
+    });
+    $('.datetimepicker').datetimepicker({
+        <?php $datetimepicker_timepicker = true; $datetimepicker_showseconds = false; $datetimepicker_formatInput = true; require(\OpenEMR\Core\OEGlobalsBag::getInstance()->getSrcDir() . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); unset($datetimepicker_timepicker, $datetimepicker_showseconds, $datetimepicker_formatInput); ?>
+    });
+});
+</script>

@@ -21,6 +21,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/../../lib/CardDate.php';
+
 $disabled = $readOnly ? 'disabled' : '';
 
 function holterFld(string $name, ?array $study, string $default = ''): string
@@ -34,10 +36,7 @@ function holterTimeValue(string $name, ?array $study): string
     return $value !== '' ? substr($value, 0, 5) : '';
 }
 
-$studyDateVal = holterFld('study_date', $study, date('Y-m-d\TH:i'));
-if (strpos($studyDateVal, ' ') !== false) {
-    $studyDateVal = str_replace(' ', 'T', substr($studyDateVal, 0, 16));
-}
+$studyDateVal = holterFld('study_date', $study, date('Y-m-d H:i:s'));
 ?>
 
 <!-- ======================================================================= -->
@@ -54,11 +53,11 @@ if (strpos($studyDateVal, ' ') !== false) {
                 <label for="study_date" class="form-label required">
                     <?php echo xlt('Study Date & Time'); ?>
                 </label>
-                <input type="datetime-local"
-                       class="form-control form-control-sm"
+                <input type="text"
+                       class="datetimepicker form-control form-control-sm"
                        id="study_date"
                        name="study_date"
-                       value="<?php echo attr($studyDateVal); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayDateTime($studyDateVal)); ?>"
                        required
                        <?php echo $disabled; ?>>
             </div>
@@ -229,24 +228,22 @@ if (strpos($studyDateVal, ' ') !== false) {
                 <label for="hr_min_time" class="form-label">
                     <?php echo xlt('Time of Minimum Heart Rate'); ?>
                 </label>
-                <input type="time"
-                       step="1"
+                <input type="text"
                        class="form-control form-control-sm"
                        id="hr_min_time"
                        name="hr_min_time"
-                       value="<?php echo attr(holterTimeValue('hr_min_time', $study)); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayTime(holterTimeValue('hr_min_time', $study))); ?>"
                        <?php echo $disabled; ?>>
             </div>
             <div class="col-md-3">
                 <label for="hr_max_time" class="form-label">
                     <?php echo xlt('Time of Maximum Heart Rate'); ?>
                 </label>
-                <input type="time"
-                       step="1"
+                <input type="text"
                        class="form-control form-control-sm"
                        id="hr_max_time"
                        name="hr_max_time"
-                       value="<?php echo attr(holterTimeValue('hr_max_time', $study)); ?>"
+                       value="<?php echo attr(\OpenEMR\Forms\Cardiology\CardDate::displayTime(holterTimeValue('hr_max_time', $study))); ?>"
                        <?php echo $disabled; ?>>
             </div>
         </div>
@@ -528,3 +525,14 @@ if (strpos($studyDateVal, ' ') !== false) {
         </div>
     </div>
 </div>
+
+<script>
+$(function () {
+    $('.datepicker').datetimepicker({
+        <?php $datetimepicker_timepicker = false; $datetimepicker_showseconds = false; $datetimepicker_formatInput = true; require(\OpenEMR\Core\OEGlobalsBag::getInstance()->getSrcDir() . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); unset($datetimepicker_timepicker, $datetimepicker_showseconds, $datetimepicker_formatInput); ?>
+    });
+    $('.datetimepicker').datetimepicker({
+        <?php $datetimepicker_timepicker = true; $datetimepicker_showseconds = false; $datetimepicker_formatInput = true; require(\OpenEMR\Core\OEGlobalsBag::getInstance()->getSrcDir() . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); unset($datetimepicker_timepicker, $datetimepicker_showseconds, $datetimepicker_formatInput); ?>
+    });
+});
+</script>

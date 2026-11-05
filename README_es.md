@@ -639,6 +639,17 @@ incrusta los archivos de imagen uno por página cuando hay GD. Los PDF solo se
 listan (Dompdf no puede fusionar páginas PDF). Sin GD, las etiquetas `<img>`
 (logo e imágenes adjuntas) se quitan para que la descarga igual se renderice.
 
+Fechas y horas en todas partes usan el manejo nativo de OpenEMR: los inputs de los
+formularios son texto con las clases `datepicker` / `datetimepicker` del core
+(asset `datetime-picker`, configuración de
+`library/js/xl/jquery-datetimepicker-2-5-4.js.php`), los valores se muestran con
+`DateFormatterUtils` (`oeFormatShortDate`, `oeFormatDateTime`, `oeFormatTime`)
+para respetar los globals `date_display_format` / `time_display_format` del
+usuario, y al guardar se parsean de vuelta con `DateToYYYYMMDD` /
+`dateStringToDateTime` vía `lib/CardDate.php` (usado por
+`CardInput::dateTime()`, `date()` y `time()`). El mismo formateador se usa en
+cada `print.php`.
+
 ---
 
 ## 10. Reglas de visibilidad de módulos (CardRegistry)

@@ -69,7 +69,7 @@ $readOnly = false;
 <html>
 <head>
     <title><?php echo xlt('12-Lead ECG – New Study'); ?></title>
-    <?php Header::setupHeader(); ?>
+    <?php Header::setupHeader(['datetime-picker']); ?>
     <link rel="stylesheet"
           href="<?php echo attr(CardiologyContainer::getWebRootUrl()); ?>/css/cardiology.css?v=<?php echo attr($GLOBALS['v_js_includes']); ?>">
 </head>

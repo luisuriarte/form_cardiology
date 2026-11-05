@@ -243,7 +243,7 @@ ob_start();
         <div class="header-right">
             <div class="sub"><?= xlt('BIOCHEMISTRY & DIAGNOSTIC SERVICE') ?></div>
             <div class="sub"><?= xlt('Unified Electronic Protocol') ?></div>
-            <div class="sub" style="margin-top: 2px;"><?= xlt('Issue Date') ?>: <?= date('d/m/Y H:i:s') ?></div>
+            <div class="sub" style="margin-top: 2px;"><?= xlt('Issue Date') ?>: <?= \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue(date('Y-m-d H:i:s')) ?></div>
         </div>
     </div>
 
@@ -270,7 +270,7 @@ ob_start();
             <td class="label"><?= xlt('Updated By') ?>:</td>
             <td class="val"><?= htmlspecialchars($updatedBy) ?></td>
             <td class="label"><?= xlt('Updated At') ?>:</td>
-            <td class="val"><?= htmlspecialchars($updatedAt ? date('d/m/Y H:i', strtotime($updatedAt)) : '--:--') ?></td>
+            <td class="val"><?= htmlspecialchars($updatedAt ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($updatedAt) : '--:--') ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('Status') ?>:</td>
@@ -285,7 +285,7 @@ ob_start();
 
     <!-- Disclaimer -->
     <div class="disclaimer">
-        <?= xlt('Report generated on') ?>: <?= date('d/m/Y H:i:s') ?> | <?= xlt('OpenEMR') ?>
+        <?= xlt('Report generated on') ?>: <?= \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue(date('Y-m-d H:i:s')) ?> | <?= xlt('OpenEMR') ?>
     </div>
 </body>
 </html>
