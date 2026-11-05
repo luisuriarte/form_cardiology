@@ -2,8 +2,8 @@
  * cardiology-documents.js
  *
  * Front-end controller for cardiology study document attachments.
- * Opens the reusable upload dialog, attaches existing patient documents,
- * unlinks attachments, and refreshes only the attachment table.
+ * Opens the reusable upload dialog, unlinks attachments, and refreshes
+ * only the attachment table.
  *
  * Compatible with OpenEMR 8.2.0 - 8.5.0 and Bootstrap 4 / 5.
  */
@@ -259,130 +259,6 @@
                     keepOpen: true,
                     url: uploadUrl,
                     onDone: handleUploadDone
-                });
-            });
-        }
-
-        // Toggle Candidate Documents Picker Panel
-        const btnOpenPicker = document.getElementById('cardiology-btn-open-picker');
-        const pickerPanel = document.getElementById('cardiology-picker-panel');
-        const pickerLoading = document.getElementById('cardiology-picker-loading');
-        const pickerSelect = document.getElementById('cardiology-candidate-select');
-        const btnConfirmLink = document.getElementById('cardiology-btn-confirm-link');
-        const btnPickerCancel = document.getElementById('cardiology-picker-cancel-btn');
-
-        function loadCandidates() {
-            if (!pickerSelect) {
-                return;
-            }
-            pickerSelect.innerHTML = '<option value="">' + escapeHtml(t('selectCandidate', '-- Select an existing patient document --')) + '</option>';
-            if (btnConfirmLink) {
-                btnConfirmLink.disabled = true;
-            }
-            if (pickerLoading) {
-                pickerLoading.classList.remove('d-none');
-            }
-
-            postApi({
-                action: 'list_candidates',
-                card_code: cardCode,
-                study_id: studyId
-            }).then(function (result) {
-                if (pickerLoading) {
-                    pickerLoading.classList.add('d-none');
-                }
-                if (result.ok && result.data && result.data.success) {
-                    const list = result.data.candidates || [];
-                    if (list.length === 0) {
-                        pickerSelect.innerHTML = '<option value="">' + escapeHtml(t('noCandidates', 'No unlinked patient documents found.')) + '</option>';
-                        return;
-                    }
-                    pickerSelect.innerHTML = '<option value="">' +
-                        escapeHtml(fmt(t('candidatesAvailable', '-- Select a document (%d available) --'), [list.length])) +
-                        '</option>';
-                    list.forEach(function (candidate) {
-                        const option = document.createElement('option');
-                        option.value = candidate.id;
-                        const categoryLabel = candidate.category_name ? ' [' + candidate.category_name + ']' : '';
-                        const dateLabel = candidate.date ? ' (' + candidate.date + ')' : '';
-                        option.textContent = '#' + candidate.id + ' - ' + (candidate.name || 'Document') + categoryLabel + dateLabel;
-                        pickerSelect.appendChild(option);
-                    });
-                } else {
-                    const message = (result.data && result.data.message)
-                        ? result.data.message
-                        : t('errorLoading', 'Error loading candidate documents.');
-                    showAlert(message, 'danger');
-                }
-            }).catch(function (error) {
-                if (pickerLoading) {
-                    pickerLoading.classList.add('d-none');
-                }
-                showAlert(fmt(t('networkError', 'Network error: %s'), [error.message]), 'danger');
-            });
-        }
-
-        if (btnOpenPicker && pickerPanel) {
-            btnOpenPicker.addEventListener('click', function () {
-                hideAlert();
-                pickerPanel.classList.toggle('d-none');
-                if (!pickerPanel.classList.contains('d-none')) {
-                    loadCandidates();
-                }
-            });
-        }
-
-        if (btnPickerCancel && pickerPanel) {
-            btnPickerCancel.addEventListener('click', function () {
-                pickerPanel.classList.add('d-none');
-            });
-        }
-
-        if (pickerSelect) {
-            pickerSelect.addEventListener('change', function () {
-                if (btnConfirmLink) {
-                    btnConfirmLink.disabled = !pickerSelect.value || parseInt(pickerSelect.value, 10) <= 0;
-                }
-            });
-        }
-
-        // Attach Existing Document
-        if (btnConfirmLink) {
-            btnConfirmLink.addEventListener('click', function () {
-                const documentId = pickerSelect ? pickerSelect.value : '';
-                if (!documentId || parseInt(documentId, 10) <= 0) {
-                    return;
-                }
-
-                hideAlert();
-                btnConfirmLink.disabled = true;
-
-                postApi({
-                    action: 'attach_existing',
-                    card_code: cardCode,
-                    study_id: studyId,
-                    document_id: documentId
-                }).then(function (result) {
-                    btnConfirmLink.disabled = false;
-                    if (result.ok && result.data && result.data.success) {
-                        showAlert(result.data.message || t('linkSuccess', 'Existing document linked successfully.'), 'success');
-                        if (pickerPanel) {
-                            pickerPanel.classList.add('d-none');
-                        }
-                        if (result.data.documents) {
-                            renderAttachments(result.data.documents);
-                        } else {
-                            refreshAttachments();
-                        }
-                    } else {
-                        const message = (result.data && result.data.message)
-                            ? result.data.message
-                            : t('linkError', 'Failed to attach existing document.');
-                        showAlert(message, 'danger');
-                    }
-                }).catch(function (error) {
-                    btnConfirmLink.disabled = false;
-                    showAlert(fmt(t('networkError', 'Network error: %s'), [error.message]), 'danger');
                 });
             });
         }

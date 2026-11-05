@@ -87,16 +87,10 @@ $docsI18n = [
     'unlinkConfirm'       => xla('Are you sure you want to unlink this document from the study? The file itself will remain safely in the patient documents.'),
     'postFinal'           => xlt('Added after finalization'),
     'postFinalTitle'      => xla('This document was attached after the study was finalized.'),
-    'selectCandidate'     => xlt('-- Select an existing patient document --'),
-    'noCandidates'        => xlt('No unlinked patient documents found.'),
-    'candidatesAvailable' => xlt('-- Select a document (%d available) --'),
-    'errorLoading'        => xlt('Error loading candidate documents.'),
     'uploadSuccess'       => xlt('%d document(s) uploaded successfully.'),
     'uploadPartial'       => xlt('%d uploaded, %d failed.'),
     'uploadFailed'        => xlt('No documents were uploaded.'),
     'uploadCancelled'     => xlt('Upload cancelled.'),
-    'linkSuccess'         => xlt('Existing document linked successfully.'),
-    'linkError'           => xlt('Failed to attach existing document.'),
     'unlinkSuccess'       => xlt('Attachment unlinked successfully.'),
     'unlinkError'         => xlt('Failed to unlink document.'),
     'networkError'        => xlt('Network error: %s'),
@@ -131,10 +125,7 @@ $docsI18n = [
         <?php if ($canWrite) : ?>
         <div class="cardiology-docs-actions btn-group">
             <button type="button" class="btn btn-sm btn-outline-primary" id="cardiology-btn-open-upload">
-                <i class="fa fa-upload me-1" aria-hidden="true"></i> <?php echo xlt('Upload Document'); ?>
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="cardiology-btn-open-picker">
-                <i class="fa fa-folder-open me-1" aria-hidden="true"></i> <?php echo xlt('Attach Existing'); ?>
+                <i class="fa fa-upload me-1" aria-hidden="true"></i> <?php echo xlt('Upload Documents'); ?>
             </button>
         </div>
         <?php endif; ?>
@@ -152,37 +143,6 @@ $docsI18n = [
             ); ?>
         </p>
 
-        <!-- Attach Existing Document Picker Panel (toggled via button) -->
-        <div id="cardiology-picker-panel" class="card mb-3 bg-light border-light d-none">
-            <div class="card-body p-3">
-                <h6 class="card-title mb-2">
-                    <i class="fa fa-link me-1 text-secondary" aria-hidden="true"></i> <?php echo xlt('Link Existing Patient Document'); ?>
-                </h6>
-                <div id="cardiology-picker-loading" class="text-muted small py-2 d-none">
-                    <i class="fa fa-spinner fa-spin me-1" aria-hidden="true"></i> <?php echo xlt('Loading candidate documents...'); ?>
-                </div>
-                <div id="cardiology-picker-content">
-                    <div class="row g-2 align-items-center">
-                        <div class="col-md-9 col-sm-12">
-                            <select id="cardiology-candidate-select" class="form-select form-control form-control-sm">
-                                <option value=""><?php echo xlt('-- Select an existing patient document --'); ?></option>
-                            </select>
-                        </div>
-                        <div class="col-md-3 col-sm-12 text-md-end">
-                            <button type="button" class="btn btn-sm btn-secondary" id="cardiology-btn-confirm-link" disabled>
-                                <i class="fa fa-link me-1" aria-hidden="true"></i> <?php echo xlt('Attach'); ?>
-                            </button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary ms-1" id="cardiology-picker-cancel-btn">
-                                <?php echo xlt('Cancel'); ?>
-                            </button>
-                        </div>
-                    </div>
-                    <small class="text-muted d-block mt-1">
-                        <?php echo xlt('Lists up to 50 unlinked documents belonging to this patient.'); ?>
-                    </small>
-                </div>
-            </div>
-        </div>
         <?php endif; ?>
 
         <!-- Attachments Table -->

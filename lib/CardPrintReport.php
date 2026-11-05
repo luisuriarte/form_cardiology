@@ -135,10 +135,17 @@ final class CardPrintReport
         ]);
         // Dompdf requires the GD extension for <img> tags (including the logo).
         // Without GD, strip raster images so the PDF still renders; SVG charts
-        // and tables are unaffected. Attached images are then listed by name.
+        // (embedded as data-URI <img>) and tables are unaffected. Attached
+        // images are then listed by name.
         if (!extension_loaded('gd')) {
-            $html = (string)preg_replace('/<img\b[^>]*>/i', '', $html);
+            $html = (string)preg_replace('/<img\b[^>]*src="data:image\/(?:png|jpe?g|gif|bmp|webp)[^"]*"[^>]*>/i', '', $html);
         }
+        // Never include the screen-only Print / Download toolbar in the PDF.
+        $html = (string)preg_replace(
+            '/<div class="no-print"[^>]*>.*?<\/div>\s*<style>@media print\{.*?\}\}<\/style>/s',
+            '',
+            $html
+        );
         $dompdf->loadHtml($html, 'UTF-8');
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
@@ -197,7 +204,9 @@ final class CardPrintReport
                 $html .= '<div style="text-align: center; margin-bottom: 4px;">' . $legend . '</div>';
             }
 
-            $html .= '<div style="text-align: center;">' . self::svgLineChart($chart) . '</div></div>';
+            $html .= '<div style="text-align: center;"><img src="data:image/svg+xml;base64,'
+                . base64_encode(self::svgLineChart($chart))
+                . '" width="520" height="180" alt="' . attr($title) . '"></div></div>';
         }
 
         return $html . '</div>';
@@ -256,7 +265,7 @@ final class CardPrintReport
                     . text(xlt('Image preview requires the GD extension on the server.'))
                     . '</div>';
             }
-            foreach (array_slice($images, 0, 12) as $att) {
+            foreach (array_slice($images, 0, 12) as $index => $att) {
                 $name = (string)($att['doc_name'] ?? '');
                 $caption = $name . ' — ' . (string)($att['category_name'] ?? '') . ' — '
                     . self::formatValue($att['doc_date'] ?? $att['linked_at'] ?? null);
@@ -272,7 +281,10 @@ final class CardPrintReport
                     continue;
                 }
 
-                $html .= '<div style="page-break-before: always; text-align: center;">'
+                // First image goes right below the title (same page); each
+                // following image gets its own page.
+                $pageBreak = $index > 0 ? 'page-break-before: always; ' : '';
+                $html .= '<div style="' . $pageBreak . 'text-align: center;">'
                     . '<div style="font-size: 12px; font-weight: bold; color: #475569; margin-bottom: 6px;">'
                     . text($caption) . '</div>'
                     . '<img src="' . attr($dataUri) . '" style="max-width: 170mm; max-height: 230mm;">'
