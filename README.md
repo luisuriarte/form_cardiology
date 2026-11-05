@@ -1213,7 +1213,10 @@ size, and maximum files per request are generated server-side.
 - A supplied `category_id` must exist and its `aco_spec` must pass core ACL.
 - Only `pdf`, `jpg`, `jpeg`, `jfif`, `png`, `gif`, `webp`, `bmp`, `avif`, `heic`, `heif`, `tif`, and `tiff` are accepted.
 - The extension is checked first, then the real content type is detected with
-  fileinfo. Double extensions that hide executables are rejected.
+  fileinfo. If a file's bytes are a different allowed type (for example a
+  `.jpeg` that is really WebP), the upload is accepted and the stored name is
+  renamed to the canonical extension. Unknown content types and double
+  extensions that hide executables are rejected.
 - The effective limit is the smallest of the module ceiling (50 MB),
   `upload_max_filesize`, and `post_max_size`; the request is limited to 10
   files. The dialog displays the effective limit returned by the server.

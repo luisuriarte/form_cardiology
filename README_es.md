@@ -1255,7 +1255,7 @@ servidor.
 - Se exige `patients/docs`; las subidas vinculadas además exigen `CardRegistry::canWrite()` para el módulo.
 - Un `category_id` enviado debe existir y su `aco_spec` debe pasar la ACL del núcleo.
 - Sólo se aceptan `pdf`, `jpg`, `jpeg`, `jfif`, `png`, `gif`, `webp`, `bmp`, `avif`, `heic`, `heif`, `tif` y `tiff`.
-- Primero se valida la extensión y luego se detecta el tipo de contenido real con fileinfo. Se rechazan las dobles extensiones que ocultan ejecutables.
+- Primero se valida la extensión y luego se detecta el tipo de contenido real con fileinfo. Si los bytes corresponden a otro tipo permitido (por ejemplo un `.jpeg` que en realidad es WebP), la subida se acepta y el nombre almacenado se renombra a la extensión canónica. Se rechazan los tipos desconocidos y las dobles extensiones que ocultan ejecutables.
 - El límite efectivo es el menor entre el techo del módulo (50 MB), `upload_max_filesize` y `post_max_size`; la solicitud se limita a 10 archivos. El diálogo muestra el límite efectivo informado por el servidor.
 - Los nombres visibles se sanitizan (componentes de ruta, caracteres de control y longitud excesiva) antes de llegar a `Document::createDocument()`.
 - Los documentos se crean únicamente mediante la clase `Document` del núcleo bajo la categoría validada. Todo el SQL usa sentencias preparadas y ningún nombre de tabla o columna proviene del request.

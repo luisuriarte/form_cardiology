@@ -455,15 +455,35 @@ final class CardDocuments
         }
 
         $detectedMime = self::detectMimeType($tmpPath);
-        $allowedMimes = self::ALLOWED_MIME_MAP[$extension] ?? [];
-        if ($detectedMime === '' || !in_array($detectedMime, $allowedMimes, true)) {
+        if ($detectedMime === '') {
             throw new \InvalidArgumentException(
                 sprintf(
                     xlt('File content type "%s" is not permitted or does not match extension for "%s".'),
-                    $detectedMime !== '' ? $detectedMime : xlt('unknown'),
+                    xlt('unknown'),
                     $safeName
                 )
             );
+        }
+
+        $allowedMimes = self::ALLOWED_MIME_MAP[$extension] ?? [];
+        if (!in_array($detectedMime, $allowedMimes, true)) {
+            // Browsers, image editors, and "save image as" workflows often keep a
+            // .jpeg/.png name for a file whose real content is WebP (or another
+            // allowed image type). Accept it when the detected type is in the
+            // global allowlist, and rename the extension so the stored name
+            // matches the real content. Unknown types are still rejected.
+            $canonicalExtension = self::extensionForMime($detectedMime);
+            if ($canonicalExtension === null) {
+                throw new \InvalidArgumentException(
+                    sprintf(
+                        xlt('File content type "%s" is not permitted or does not match extension for "%s".'),
+                        $detectedMime,
+                        $safeName
+                    )
+                );
+            }
+            $extension = $canonicalExtension;
+            $safeName  = self::replaceFileExtension($safeName, $canonicalExtension);
         }
 
         return [
@@ -521,6 +541,33 @@ final class CardDocuments
         }
 
         return '';
+    }
+
+    /**
+     * Returns the canonical allowed extension for a detected MIME type.
+     *
+     * Used when a file's real content does not match its declared extension
+     * (for example a .jpeg file whose bytes are WebP).
+     */
+    private static function extensionForMime(string $mime): ?string
+    {
+        foreach (self::ALLOWED_MIME_MAP as $extension => $mimes) {
+            if (in_array($mime, $mimes, true)) {
+                return $extension;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Replaces the final extension of a sanitized filename.
+     */
+    private static function replaceFileExtension(string $name, string $extension): string
+    {
+        $base = pathinfo($name, PATHINFO_FILENAME);
+
+        return $base !== '' ? $base . '.' . $extension : $name;
     }
 
     /**
