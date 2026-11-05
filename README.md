@@ -509,6 +509,44 @@ All methods throw `\InvalidArgumentException` with the field name in the message
 
 ---
 
+## 8.2 Printable reports and institutional logo (`CardPrintAssets`)
+
+Every `cards/<code>/print.php` renders a self-contained HTML report opened in a
+new tab. The page does **not** call Dompdf itself; it is written so a browser
+"Print to PDF" or any Dompdf wrapper can consume it safely.
+
+- `lib/CardPrintAssets.php` (namespace `OpenEMR\Forms\Cardiology`) exposes
+  `CardPrintAssets::logoDataUri()`, which returns the institutional logo as a
+  `data:image/...;base64,...` URI or an empty string when no logo is available.
+- Resolution order: `CLINIC_LOGO_PATH` → `<webserver_root>/public/images/logos/cardiology/`
+  → the module's own `assets/` directory.
+- **PNG is preferred over SVG** on purpose: some Dompdf / `php-svg-lib`
+  versions do not render SVG `<text>` or embedded fonts, so the logo would
+  disappear from the PDF.
+- The module ships `assets/logo_banner.png` (primary), `assets/logo_banner.svg`,
+  `assets/logo.png`, and `assets/logo.svg`. Keep `logo_banner.png` in place when
+  deploying; no database configuration is required.
+- All report pages keep the `$logoBase64` variable name used by the shared
+  header markup. If the helper returns an empty string, the header simply omits
+  the image.
+
+### Document upload linkage
+
+`CardDocuments::storeUploadedFile()` stores the file through OpenEMR's
+`Document` class and then links it to the study in `card_documents`. The insert
+uses `sqlInsert()`, whose return value is the new link ID (there is no
+`QueryUtils::lastInsertId()` in OpenEMR 8.2–8.5). `documents_upload.php`
+returns the refreshed `attachments` array after every POST so the study's
+attachment table updates without a page reload.
+
+### Font Awesome note
+
+OpenEMR 8.5 ships Font Awesome 6.7.2. Use `fa-folder` and `fa-folder-open`;
+`fa-folder-open-o` does not exist in this version and leaves the folder tree
+without an icon.
+
+---
+
 ## 9. Card visibility rules (CardRegistry)
 
 `CardRegistry::getVisibleCards(int $userId)` returns a card when **all** of:

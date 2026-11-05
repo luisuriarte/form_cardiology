@@ -31,45 +31,11 @@ use OpenEMR\Common\Acl\AclMain;
 use OpenEMR\Forms\Cardiology\CardiologyContainer;
 
 // ---------------------------------------------------------------------------
-// Logos for PDF generation (Dompdf / php-svg-lib)
+// Institutional logo for printable reports (Dompdf-safe data URI)
 // ---------------------------------------------------------------------------
-$logo_dir = $GLOBALS['webroot'] . '/assets';
-$logoBannerPath = $logo_dir . '/logo_banner.svg';
-$logoSqPath     = $logo_dir . '/logo.svg';
-$logoBannerPngPath = $logo_dir . '/logo_banner.png';
-$logoSqPngPath    = $logo_dir . '/logo.png';
+require_once(__DIR__ . '/../../lib/CardPrintAssets.php');
 
-// Resolve the best available logo, following the same pattern as
-// patient-express-portal/public/print_pdf.php: prefer CLINIC_LOGO_PATH,
-// then explicit candidates, fallback to nothing.
-$effectiveLogoPath = defined('CLINIC_LOGO_PATH') && file_exists(CLINIC_LOGO_PATH)
-    ? CLINIC_LOGO_PATH
-    : (
-        $logoBannerPath . file_exists($logoBannerPath) ? $logoBannerPath : null
-    ) . '|' . (
-        $logoSqPath . file_exists($logoSqPath) ? $logoSqPath : null
-    );
-
-$logoBase64 = '';
-if ($effectiveLogoPath && str_contains($effectiveLogoPath, '|')) {
-    // Fallback path not usable as single file; try each candidate independently
-    $tried = [];
-    foreach ([$logoBannerPath, $logoSqPath] as $candidate) {
-        if ($candidate && file_exists($candidate) && !in_array($candidate, $tried)) {
-            $tried[] = $candidate;
-            $ext = strtolower(pathinfo($candidate, PATHINFO_EXTENSION));
-            $mime = $ext === 'svg' ? 'image/svg+xml' : ($ext === 'png' ? 'image/png' : 'image/' . $ext);
-            $imgData = file_get_contents($candidate);
-            $logoBase64 = 'data:' . $mime . ';base64,' . base64_encode($imgData);
-            break;
-        }
-    }
-} elseif ($effectiveLogoPath && file_exists($effectiveLogoPath)) {
-    $ext = strtolower(pathinfo($effectiveLogoPath, PATHINFO_EXTENSION));
-    $mime = $ext === 'svg' ? 'image/svg+xml' : ($ext === 'png' ? 'image/png' : 'image/' . $ext);
-    $imgData = file_get_contents($effectiveLogoPath);
-    $logoBase64 = 'data:' . $mime . ';base64,' . base64_encode($imgData);
-}
+$logoBase64 = \OpenEMR\Forms\Cardiology\CardPrintAssets::logoDataUri();
 
 // If no logo found, keep $logoBase64 empty (PDF will have no header image).
 

@@ -26,7 +26,6 @@ require_once __DIR__ . '/CardInput.php';
 require_once __DIR__ . '/CardDocumentCategories.php';
 
 use OpenEMR\Common\Acl\AclMain;
-use OpenEMR\Common\Database\QueryUtils;
 use Throwable;
 
 final class CardDocuments
@@ -828,13 +827,13 @@ final class CardDocuments
         }
 
         try {
-            sqlStatement(
+            $linkId = (int)sqlInsert(
                 'INSERT INTO `card_documents`
                    (card_code, study_id, pid, document_id, category_id, created_by, created_at, activity)
                  VALUES (?, ?, ?, ?, ?, ?, NOW(), 1)',
                 [$cardCode, $studyId, $pid, $documentId, $categoryId, $username]
             );
-            return (int)QueryUtils::lastInsertId();
+            return $linkId;
         } catch (Throwable $e) {
             // Check for duplicate key error (1062)
             if (str_contains($e->getMessage(), '1062') || str_contains($e->getMessage(), 'Duplicate entry')) {

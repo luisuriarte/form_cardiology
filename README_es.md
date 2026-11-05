@@ -542,6 +542,45 @@ Todos los métodos lanzan `\InvalidArgumentException` incluyendo el nombre del c
 
 ---
 
+## 9.2 Informes imprimibles y logotipo institucional (`CardPrintAssets`)
+
+Cada `cards/<code>/print.php` genera un informe HTML autocontenido que se abre
+en una pestaña nueva. La página **no** invoca Dompdf por sí misma; está escrita
+para que la impresión del navegador ("Imprimir → Guardar como PDF") o cualquier
+envoltorio de Dompdf la consuma sin problemas.
+
+- `lib/CardPrintAssets.php` (namespace `OpenEMR\Forms\Cardiology`) expone
+  `CardPrintAssets::logoDataUri()`, que devuelve el logotipo institucional como
+  URI `data:image/...;base64,...` o una cadena vacía si no hay logo disponible.
+- Orden de búsqueda: `CLINIC_LOGO_PATH` → `<webserver_root>/public/images/logos/cardiology/`
+  → la carpeta `assets/` propia del módulo.
+- **Se prefiere PNG antes que SVG** a propósito: algunas versiones de Dompdf /
+  `php-svg-lib` no renderizan `<text>` ni fuentes embebidas en SVG, por lo que
+  el logo desaparecería del PDF.
+- El módulo incluye `assets/logo_banner.png` (principal),
+  `assets/logo_banner.svg`, `assets/logo.png` y `assets/logo.svg`. Mantener
+  `logo_banner.png` al desplegar; no requiere configuración en base de datos.
+- Todos los informes conservan la variable `$logoBase64` que usa el encabezado
+  compartido. Si el helper devuelve una cadena vacía, el encabezado simplemente
+  omite la imagen.
+
+### Vinculación de documentos subidos
+
+`CardDocuments::storeUploadedFile()` guarda el archivo mediante la clase
+`Document` de OpenEMR y luego lo vincula al estudio en `card_documents`. El
+insert usa `sqlInsert()`, cuyo valor de retorno es el ID del vínculo (en
+OpenEMR 8.2–8.5 no existe `QueryUtils::lastInsertId()`). `documents_upload.php`
+devuelve el arreglo `attachments` actualizado después de cada POST, de modo que
+la tabla de adjuntos del estudio se refresca sin recargar la página.
+
+### Nota sobre Font Awesome
+
+OpenEMR 8.5 incluye Font Awesome 6.7.2. Usar `fa-folder` y `fa-folder-open`;
+`fa-folder-open-o` no existe en esta versión y deja el árbol de carpetas sin
+icono.
+
+---
+
 ## 10. Reglas de visibilidad de módulos (CardRegistry)
 
 `CardRegistry::getVisibleCards(int $userId)` devuelve un módulo cuando se cumplen **todas** las condiciones:

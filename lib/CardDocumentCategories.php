@@ -279,7 +279,7 @@ final class CardDocumentCategories
             $node        = $all[$id];
             $hasChildren = !empty($children[$id]);
             $name        = (string)$node['name'];
-            $icon        = $hasChildren ? 'fa-folder' : 'fa-folder-open-o';
+            $icon        = $hasChildren ? 'fa-folder' : 'fa-folder-open';
             $toggleClass = $hasChildren ? 'collapsed' : 'invisible';
             $nodeClass   = 'cardiology-tree-node' . ($hasChildren ? ' has-children' : ' is-selectable');
 
