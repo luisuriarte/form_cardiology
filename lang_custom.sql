@@ -1195,6 +1195,7 @@ INSERT INTO tmp_card_lang (constant_name, definition) VALUES
 ('Name', 'Nombre'),
 ('Type', 'Tipo'),
 ('Action', 'Acción'),
+('View', 'Ver'),
 ('PDF', 'PDF'),
 ('IMAGE', 'IMAGEN'),
 ('DICOM', 'DICOM'),

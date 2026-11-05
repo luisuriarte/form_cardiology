@@ -563,6 +563,13 @@ envoltorio de Dompdf la consuma sin problemas.
 - Todos los informes conservan la variable `$logoBase64` que usa el encabezado
   compartido. Si el helper devuelve una cadena vacía, el encabezado simplemente
   omite la imagen.
+- Cada informe usa un bloque `@page` A4 vertical (`18mm 15mm 16mm 15mm`) con
+  cuerpo de 12 px, títulos de sección de 13 px y el logotipo centrado limitado a
+  90 px de alto por 320 px de ancho. El encabezado lleva una línea inferior y el
+  cuerpo activa `print-color-adjust: exact` para conservar la banda de título,
+  las insignias y las tablas al usar "Imprimir → Guardar como PDF".
+- El logotipo va en un bloque centrado propio, arriba del encabezado de la
+  clínica, para que no quede limitado por el ancho de la columna izquierda.
 
 ### Vinculación de documentos subidos
 
@@ -573,11 +580,27 @@ OpenEMR 8.2–8.5 no existe `QueryUtils::lastInsertId()`). `documents_upload.php
 devuelve el arreglo `attachments` actualizado después de cada POST, de modo que
 la tabla de adjuntos del estudio se refresca sin recargar la página.
 
+### Visor de documentos
+
+Los enlaces de adjuntos (`templates/_documents.php`, `documents_upload.php` y el
+diálogo de subida) apuntan a
+`controller.php?document&retrieve&patient_id=...&document_id=...&as_file=false&original_file=true&disable_exit=false&show_original=true`.
+Mantener los argumentos en ese orden posicional: el despachador legacy del
+controlador pasa los argumentos de la query por posición, por lo que tanto el
+orden como los parámetros intermedios `original_file`/`disable_exit` son
+necesarios para que `show_original` llegue al argumento correcto.
+`as_file=false` hace que el navegador muestre el archivo en línea en lugar de
+descargarlo; `show_original=true` obliga a OpenEMR a servir el archivo original
+en vez de una miniatura generada, igual que `view_document.php` del portal.
+
 ### Nota sobre Font Awesome
 
 OpenEMR 8.5 incluye Font Awesome 6.7.2. Usar `fa-folder` y `fa-folder-open`;
 `fa-folder-open-o` no existe en esta versión y deja el árbol de carpetas sin
-icono.
+icono. El diálogo de subida es una página independiente que usa
+`Header::setupHeader(['no_main-theme', 'fontawesome'])`; `fontawesome` no es un
+asset autoload en `config.yaml`, por lo que debe solicitarse explícitamente o
+los iconos de carpeta, subida y ojo aparecen en blanco.
 
 ---
 
@@ -1231,7 +1254,7 @@ servidor.
 - `pid` debe coincidir con la sesión activa del paciente; no se pueden vincular estudios de otros pacientes.
 - Se exige `patients/docs`; las subidas vinculadas además exigen `CardRegistry::canWrite()` para el módulo.
 - Un `category_id` enviado debe existir y su `aco_spec` debe pasar la ACL del núcleo.
-- Sólo se aceptan `pdf`, `jpg`, `jpeg`, `png`, `tif` y `tiff`.
+- Sólo se aceptan `pdf`, `jpg`, `jpeg`, `jfif`, `png`, `gif`, `webp`, `bmp`, `avif`, `heic`, `heif`, `tif` y `tiff`.
 - Primero se valida la extensión y luego se detecta el tipo de contenido real con fileinfo. Se rechazan las dobles extensiones que ocultan ejecutables.
 - El límite efectivo es el menor entre el techo del módulo (50 MB), `upload_max_filesize` y `post_max_size`; la solicitud se limita a 10 archivos. El diálogo muestra el límite efectivo informado por el servidor.
 - Los nombres visibles se sanitizan (componentes de ruta, caracteres de control y longitud excesiva) antes de llegar a `Document::createDocument()`.

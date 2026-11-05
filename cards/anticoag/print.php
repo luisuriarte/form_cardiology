@@ -74,21 +74,26 @@ ob_start();
     <title><?= htmlspecialchars($study['report_title'] ?? 'Informe Anticoagulación') ?> - OpenEMR</title>
     <style>
         @page {
-            margin: 15mm 18mm 15mm 18mm;
+            margin: 18mm 15mm 16mm 15mm;
             size: A4 portrait;
         }
         body {
             font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            font-size: 10px;
+            font-size: 12px;
             color: #1e293b;
-            line-height: 1.4;
+            line-height: 1.5;
             margin: 0;
             padding: 0;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
         .header {
             display: table;
             width: 100%;
             table-layout: fixed;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 8px;
+            margin-bottom: 14px;
         }
         .header-left,
         .header-right {
@@ -96,36 +101,36 @@ ob_start();
             vertical-align: middle;
         }
         .header-left {
-            width: 60%;
+            width: 62%;
         }
         .header-right {
-            width: 40%;
+            width: 38%;
             text-align: right;
             color: #64748b;
-            font-size: 8.5px;
+            font-size: 11px;
         }
         .header-right .sub {
-            font-size: 8px;
+            font-size: 10.5px;
         }
         .logo {
             text-align: center;
-            margin-bottom: 6px;
+            margin-bottom: 9px;
         }
         .logo img {
-            max-height: 52px;
-            max-width: 220px;
+            max-height: 90px;
+            max-width: 320px;
             height: auto;
             display: inline-block;
         }
         .clinic-name {
-            font-size: 14px;
+            font-size: 20px;
             font-weight: bold;
             color: #0f172a;
             text-transform: uppercase;
             margin: 0;
         }
         .clinic-sub {
-            font-size: 8px;
+            font-size: 10.5px;
             color: #64748b;
             margin: 2px 0 0 0;
         }
@@ -134,11 +139,11 @@ ob_start();
             background-color: #f0f9ff;
             border: 1px solid #bae6fd;
             color: #0369a1;
-            font-size: 11px;
+            font-size: 15px;
             font-weight: bold;
             letter-spacing: 0.5px;
-            padding: 4px 6px;
-            margin: 10px 0 12px 0;
+            padding: 7px 10px;
+            margin: 12px 0 14px 0;
             border-radius: 4px;
             text-transform: uppercase;
         }
@@ -151,8 +156,8 @@ ob_start();
             border-collapse: collapse;
         }
         .patient-box td {
-            padding: 3px 6px;
-            font-size: 9px;
+            padding: 5px 8px;
+            font-size: 12px;
             vertical-align: top;
         }
         .patient-box td.label {
@@ -165,30 +170,31 @@ ob_start();
             width: 40%;
         }
         .section-title {
-            font-size: 9.5px;
+            page-break-after: avoid;
+            font-size: 13px;
             font-weight: bold;
             color: #0369a1;
             border-bottom: 1px solid #e2e8f0;
-            padding-bottom: 2px;
-            margin-top: 8px;
-            margin-bottom: 4px;
+            padding-bottom: 3px;
+            margin-top: 12px;
+            margin-bottom: 6px;
             text-transform: uppercase;
         }
         .report-text {
-            font-size: 9px;
+            font-size: 12px;
             color: #334155;
-            line-height: 1.4;
+            line-height: 1.55;
             background-color: #ffffff;
-            padding: 5px 7px;
+            padding: 7px 9px;
             border: 1px solid #f1f5f9;
             border-radius: 3px;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
         }
         .parameter-row {
             display: flex;
             justify-content: space-between;
-            margin: 3px 0;
-            font-size: 9px;
+            margin: 4px 0;
+            font-size: 12px;
         }
         .parameter-row .label {
             color: #64748b;
@@ -198,21 +204,22 @@ ob_start();
             font-weight: 500;
         }
         .disclaimer {
-            font-size: 7.5px;
+            page-break-inside: avoid;
+            font-size: 9.5px;
             color: #94a3b8;
             text-align: center;
-            margin-top: 14px;
+            margin-top: 18px;
         }
     </style>
 </head>
 <body>
 
     <!-- Institutional Logo + Header -->
+    <?php if ($logoBase64): ?>
+        <div class="logo"><img src="<?= htmlspecialchars($logoBase64) ?>" alt="Logo"></div>
+    <?php endif; ?>
     <div class="header">
         <div class="header-left">
-            <?php if ($logoBase64): ?>
-                <div class="logo"><img src="<?= htmlspecialchars($logoBase64) ?>" alt="Logo"></div>
-            <?php endif; ?>
             <div class="clinic-name"><?= defined('CLINIC_NAME') ? CLINIC_NAME : '' ?></div>
             <div class="clinic-sub"><?= defined('CLINIC_ADDRESS') ? CLINIC_ADDRESS : '' ?></div>
             <div class="clinic-sub"><?= defined('CLINIC_PHONE') && CLINIC_PHONE ? 'Tel: ' . CLINIC_PHONE : '' ?></div>

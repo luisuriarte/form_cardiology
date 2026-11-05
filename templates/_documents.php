@@ -70,7 +70,10 @@ $attachments      = CardDocuments::listForStudy($cardCode, $studyId, $pid);
 $csrfToken        = CardiologyContainer::collectCsrfToken();
 $apiUrl           = CardiologyContainer::getFormRootUrl() . '/documents_api.php';
 $uploadUrl        = CardiologyContainer::getFormRootUrl() . '/documents_upload.php';
-$retrieveUrlBase  = $GLOBALS['webroot'] . '/controller.php?document&retrieve&patient_id=' . urlencode((string)$pid) . '&as_file=false&document_id=';
+// Keep OpenEMR's positional retrieve arguments in order: patient_id,
+// document_id, as_file, original_file, disable_exit, show_original.
+$retrieveUrlBase     = $GLOBALS['webroot'] . '/controller.php?document&retrieve&patient_id=' . urlencode((string)$pid) . '&document_id=';
+$retrieveUrlSuffix   = '&as_file=false&original_file=true&disable_exit=false&show_original=true';
 $maxUploadBytes   = CardDocuments::getMaxUploadBytes();
 $maxUploadText    = CardDocuments::formatBytes($maxUploadBytes);
 $allowedExts      = CardDocuments::ALLOWED_EXTENSIONS;
@@ -114,6 +117,7 @@ $docsI18n = [
      data-upload-max-text="<?php echo attr($maxUploadText); ?>"
      data-upload-allowed-exts="<?php echo attr(implode(',', $allowedExts)); ?>"
      data-retrieve-base="<?php echo attr($retrieveUrlBase); ?>"
+     data-retrieve-suffix="<?php echo attr($retrieveUrlSuffix); ?>"
      data-csrf-token="<?php echo attr($csrfToken); ?>">
 
     <div class="card-header d-flex align-items-center justify-content-between bg-light">
@@ -218,7 +222,7 @@ $docsI18n = [
                                 $postFinalNote = true;
                             }
 
-                            $retrieveUrl = $retrieveUrlBase . urlencode((string)$docId);
+                            $retrieveUrl = $retrieveUrlBase . urlencode((string)$docId) . $retrieveUrlSuffix;
                         ?>
                         <tr data-link-id="<?php echo attr((string)$linkId); ?>" data-doc-id="<?php echo attr((string)$docId); ?>">
                             <td>

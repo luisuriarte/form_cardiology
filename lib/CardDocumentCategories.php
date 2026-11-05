@@ -292,7 +292,7 @@ final class CardDocumentCategories
                 . ' aria-expanded="' . ($hasChildren ? 'false' : 'true') . '">'
                 . '<span class="cardiology-tree-indent" style="width:' . ($depth * 18) . 'px"></span>'
                 . '<span class="cardiology-tree-toggle ' . $toggleClass . '"><i class="fa fa-caret-down" aria-hidden="true"></i></span>'
-                . '<span class="cardiology-tree-icon text-warning"><i class="fa ' . $icon . '" aria-hidden="true"></i></span>'
+                . '<span class="cardiology-tree-icon"><i class="fa ' . $icon . '" aria-hidden="true"></i></span>'
                 . '<span class="cardiology-tree-label">' . text($name) . '</span>'
                 . '</div>';
 

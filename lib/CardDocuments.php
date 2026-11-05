@@ -37,7 +37,12 @@ final class CardDocuments
     public const FALLBACK_CATEGORY_ID = 22007;
 
     /** Whitelisted file extensions */
-    public const ALLOWED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'tif', 'tiff'];
+    public const ALLOWED_EXTENSIONS = [
+        'pdf',
+        'jpg', 'jpeg', 'jfif',
+        'png', 'gif', 'webp', 'bmp', 'avif', 'heic', 'heif',
+        'tif', 'tiff',
+    ];
 
     /** Hard ceiling applied by this module even when PHP allows more. */
     public const MAX_CORE_UPLOAD_BYTES = 52428800; // 50 MB
@@ -55,9 +60,16 @@ final class CardDocuments
     /** Map of extension to verified MIME types */
     public const ALLOWED_MIME_MAP = [
         'pdf'  => ['application/pdf'],
-        'jpg'  => ['image/jpeg', 'image/pjpeg'],
-        'jpeg' => ['image/jpeg', 'image/pjpeg'],
+        'jpg'  => ['image/jpeg', 'image/pjpeg', 'image/jpg'],
+        'jpeg' => ['image/jpeg', 'image/pjpeg', 'image/jpg'],
+        'jfif' => ['image/jpeg', 'image/pjpeg', 'image/jpg'],
         'png'  => ['image/png', 'image/x-png'],
+        'gif'  => ['image/gif'],
+        'webp' => ['image/webp'],
+        'bmp'  => ['image/bmp', 'image/x-bmp', 'image/x-ms-bmp'],
+        'avif' => ['image/avif'],
+        'heic' => ['image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence'],
+        'heif' => ['image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence'],
         'tif'  => ['image/tiff', 'image/x-tiff'],
         'tiff' => ['image/tiff', 'image/x-tiff'],
     ];

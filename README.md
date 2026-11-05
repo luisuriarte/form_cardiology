@@ -529,6 +529,13 @@ new tab. The page does **not** call Dompdf itself; it is written so a browser
 - All report pages keep the `$logoBase64` variable name used by the shared
   header markup. If the helper returns an empty string, the header simply omits
   the image.
+- Every report uses an A4 portrait `@page` block (`18mm 15mm 16mm 15mm`) with a
+  body font of 12 px, section titles at 13 px, and a centred logo capped at
+  90 px high / 320 px wide. The header has a bottom rule and the body enables
+  `print-color-adjust: exact` so the coloured title band, badges, and tables
+  survive "Print to PDF".
+- The logo sits in its own centred block above the clinic header, so it is not
+  constrained by the left column width.
 
 ### Document upload linkage
 
@@ -539,11 +546,27 @@ uses `sqlInsert()`, whose return value is the new link ID (there is no
 returns the refreshed `attachments` array after every POST so the study's
 attachment table updates without a page reload.
 
+### Document viewer
+
+Attachment links (`templates/_documents.php`, `documents_upload.php`, and the
+upload dialog) point to
+`controller.php?document&retrieve&patient_id=...&document_id=...&as_file=false&original_file=true&disable_exit=false&show_original=true`.
+Keep the arguments in that positional order: the legacy controller dispatcher
+passes query arguments positionally, so both the order and the intermediate
+`original_file`/`disable_exit` parameters are required for `show_original` to
+reach the correct argument. `as_file=false` makes the browser display the file
+inline instead of downloading it; `show_original=true` forces OpenEMR to serve
+the original file rather than a generated thumbnail, matching the behaviour of
+the portal's `view_document.php`.
+
 ### Font Awesome note
 
 OpenEMR 8.5 ships Font Awesome 6.7.2. Use `fa-folder` and `fa-folder-open`;
 `fa-folder-open-o` does not exist in this version and leaves the folder tree
-without an icon.
+without an icon. The upload dialog is a standalone page using
+`Header::setupHeader(['no_main-theme', 'fontawesome'])`; `fontawesome` is not an
+autoload asset in `config.yaml`, so it must be requested explicitly or the
+folder, upload, and eye icons render blank.
 
 ---
 
@@ -1188,7 +1211,7 @@ size, and maximum files per request are generated server-side.
 - `patients/docs` is required, and linked uploads additionally require
   `CardRegistry::canWrite()` for the card.
 - A supplied `category_id` must exist and its `aco_spec` must pass core ACL.
-- Only `pdf`, `jpg`, `jpeg`, `png`, `tif`, and `tiff` are accepted.
+- Only `pdf`, `jpg`, `jpeg`, `jfif`, `png`, `gif`, `webp`, `bmp`, `avif`, `heic`, `heif`, `tif`, and `tiff` are accepted.
 - The extension is checked first, then the real content type is detected with
   fileinfo. Double extensions that hide executables are rejected.
 - The effective limit is the smallest of the module ceiling (50 MB),

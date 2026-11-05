@@ -26,6 +26,7 @@
         const apiUrl       = container.getAttribute('data-api-url') || '';
         const uploadUrl    = container.getAttribute('data-upload-url') || '';
         const retrieveBase = container.getAttribute('data-retrieve-base') || '';
+    const retrieveSuffix = container.getAttribute('data-retrieve-suffix') || '';
         const csrfToken    = container.getAttribute('data-csrf-token') || '';
 
         const alertBox   = document.getElementById('cardiology-docs-alert');
@@ -138,7 +139,7 @@
                     isPostFinal = true;
                 }
 
-                const openUrl = retrieveBase + encodeURIComponent(docId);
+                const openUrl = retrieveBase + encodeURIComponent(docId) + retrieveSuffix;
 
                 const tr = document.createElement('tr');
                 tr.setAttribute('data-link-id', linkId);

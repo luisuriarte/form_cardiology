@@ -118,7 +118,8 @@
             attachments.forEach(function (att) {
                 var type = mimeInfo(att.mimetype);
                 var docDate = String(att.doc_date || att.linked_at || '').substring(0, 16);
-                var openUrl = String(config.retrieveBase || '') + encodeURIComponent(att.document_id);
+                var openUrl = String(config.retrieveBase || '') + encodeURIComponent(att.document_id) +
+                    String(config.retrieveSuffix || '');
 
                 var row = document.createElement('tr');
                 row.setAttribute('data-doc-id', att.document_id);

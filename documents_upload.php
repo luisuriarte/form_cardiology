@@ -104,7 +104,7 @@ function cardiologyUploadMimeBadge(string $mime): array
  *
  * @param list<array<string,mixed>> $attachments
  */
-function cardiologyUploadRenderRows(array $attachments, string $retrieveBase): string
+function cardiologyUploadRenderRows(array $attachments, string $retrieveBase, string $retrieveSuffix = ''): string
 {
     if (empty($attachments)) {
         return '<tr><td colspan="6" class="text-center text-muted fst-italic py-4">'
@@ -120,7 +120,7 @@ function cardiologyUploadRenderRows(array $attachments, string $retrieveBase): s
         $docDate     = substr((string)($att['doc_date'] ?? $att['linked_at'] ?? ''), 0, 16);
         $sizeBytes   = (int)($att['size'] ?? 0);
         $mime        = (string)($att['mimetype'] ?? '');
-        $retrieveUrl = $retrieveBase . rawurlencode((string)$docId);
+        $retrieveUrl = $retrieveBase . rawurlencode((string)$docId) . $retrieveSuffix;
 
         [$typeLabel, $typeClass] = cardiologyUploadMimeBadge($mime);
 
@@ -368,8 +368,11 @@ if ($context !== null && $context['card_code'] !== null && $context['study_id'] 
     );
 }
 
+// Keep OpenEMR's positional retrieve arguments in order: patient_id,
+// document_id, as_file, original_file, disable_exit, show_original.
 $retrieveBase = $GLOBALS['webroot'] . '/controller.php?document&retrieve&patient_id='
-    . urlencode((string)$pid) . '&as_file=false&document_id=';
+    . urlencode((string)$pid) . '&document_id=';
+$retrieveSuffix = '&as_file=false&original_file=true&disable_exit=false&show_original=true';
 
 $config = [
     'pid'            => $pid,
@@ -384,13 +387,14 @@ $config = [
     'allowedExts'    => array_values($allowedExts),
     'uploadUrl'      => $uploadUrl,
     'retrieveBase'   => $retrieveBase,
+    'retrieveSuffix' => $retrieveSuffix,
     'attachments'    => array_values($attachments),
 ];
 ?><!DOCTYPE html>
 <html lang="<?php echo attr($_SESSION['language_direction'] ?? 'ltr') === 'rtl' ? 'ar' : 'en'; ?>">
 <head>
     <title><?php echo xlt('Upload Documents'); ?></title>
-    <?php \OpenEMR\Core\Header::setupHeader(['no_main-theme']); ?>
+    <?php \OpenEMR\Core\Header::setupHeader(['no_main-theme', 'fontawesome']); ?>
     <link rel="stylesheet" href="<?php echo attr($formRoot); ?>/css/cardiology.css">
 </head>
 <body class="cardiology-upload-dialog">
@@ -496,11 +500,11 @@ $config = [
                                         <th scope="col"><?php echo xlt('Type'); ?></th>
                                         <th scope="col" class="text-end"><?php echo xlt('Size'); ?></th>
                                         <th scope="col" class="text-center"><?php echo xlt('Date'); ?></th>
-                                        <th scope="col" class="text-center"><?php echo xlt('Action'); ?></th>
+                                        <th scope="col" class="text-center"><?php echo xlt('View'); ?></th>
                                     </tr>
                                 </thead>
                                 <tbody id="cardiology-upload-docs-tbody">
-                                    <?php echo cardiologyUploadRenderRows($attachments, $retrieveBase); ?>
+                                    <?php echo cardiologyUploadRenderRows($attachments, $retrieveBase, $retrieveSuffix); ?>
                                 </tbody>
                             </table>
                         </div>
