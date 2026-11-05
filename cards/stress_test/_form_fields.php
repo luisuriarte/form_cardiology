@@ -18,6 +18,8 @@
  * @subpackage Cardiology\StressTest
  */
 
+require_once __DIR__ . '/../../lib/CardDate.php';
+
 $fv = static function (string $key, string $default = '') use ($study): string {
     if ($study === null) { return $default; }
     return (string)($study[$key] ?? $default);

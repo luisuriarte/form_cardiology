@@ -16,6 +16,8 @@
  * @subpackage Cardiology\Echo
  */
 
+require_once __DIR__ . '/../../lib/CardDate.php';
+
 // Helper: get a value from $study or return default
 $fv = static function (string $key, string $default = '') use ($study): string {
     if ($study === null) {
