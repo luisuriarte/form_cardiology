@@ -292,6 +292,8 @@ ob_start();
 
         <!-- All study fields (complete record) -->
     <?= \OpenEMR\Forms\Cardiology\CardPrintReport::genericSections($study, xlt('Study Data')) ?>
+    <?= \OpenEMR\Forms\Cardiology\CardPrintReport::chartsHtml('hf_followup', $studyId, $pid) ?>
+    <?= \OpenEMR\Forms\Cardiology\CardPrintReport::attachedDocumentsHtml('hf_followup', $studyId, $pid) ?>
 
     <!-- Disclaimer -->
     <div class="disclaimer">

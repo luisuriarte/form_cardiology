@@ -297,6 +297,8 @@ ob_start();
 
         <!-- All study fields (complete record) -->
     <?= \OpenEMR\Forms\Cardiology\CardPrintReport::genericSections($study, xlt('Study Data')) ?>
+    <?= \OpenEMR\Forms\Cardiology\CardPrintReport::chartsHtml('ecg', $studyId, $pid) ?>
+    <?= \OpenEMR\Forms\Cardiology\CardPrintReport::attachedDocumentsHtml('ecg', $studyId, $pid) ?>
 
     <!-- Disclaimer -->
     <div class="disclaimer">

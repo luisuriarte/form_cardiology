@@ -133,11 +133,258 @@ final class CardPrintReport
             'isJavascriptEnabled' => false,
             'defaultFont' => 'DejaVu Sans',
         ]);
+        // Dompdf requires the GD extension for <img> tags (including the logo).
+        // Without GD, strip raster images so the PDF still renders; SVG charts
+        // and tables are unaffected. Attached images are then listed by name.
+        if (!extension_loaded('gd')) {
+            $html = (string)preg_replace('/<img\b[^>]*>/i', '', $html);
+        }
         $dompdf->loadHtml($html, 'UTF-8');
         $dompdf->setPaper('A4', 'portrait');
         $dompdf->render();
         $dompdf->stream($filename, ['Attachment' => true]);
         exit;
+    }
+
+    /**
+     * Evolution charts on their own page(s) after the report body.
+     *
+     * The browser charts use Chart.js <canvas>, which Dompdf cannot execute
+     * (and the server may not have GD for raster images). Instead the same
+     * series data from CardCharts is drawn server-side as inline SVG, which
+     * php-svg-lib renders without GD.
+     */
+    public static function chartsHtml(string $cardCode, int $studyId, int $pid): string
+    {
+        if ($cardCode === '' || $studyId <= 0 || $pid <= 0) {
+            return '';
+        }
+
+        require_once __DIR__ . '/CardCharts.php';
+
+        $charts = array_merge(
+            CardCharts::getStudySeries($cardCode, $studyId, $pid),
+            CardCharts::getLongitudinal($cardCode, $pid, $studyId)
+        );
+        $charts = array_values(array_filter(
+            $charts,
+            static fn($c): bool => !empty($c['has_data'])
+        ));
+        if (empty($charts)) {
+            return '';
+        }
+
+        $html = '<div style="page-break-before: always;">'
+            . '<div class="section-title">' . text(xlt('Evolution')) . '</div>';
+
+        foreach ($charts as $chart) {
+            $title = (string)($chart['title'] ?? '');
+            $unit = (string)($chart['unit'] ?? '');
+            $html .= '<div style="page-break-inside: avoid; margin-bottom: 14px;">'
+                . '<div style="text-align: center; font-size: 12px; font-weight: bold; color: #475569; margin-bottom: 4px;">'
+                . text($title)
+                . ($unit !== '' ? ' (' . text($unit) . ')' : '')
+                . '</div>';
+
+            // Legend in HTML (SVG text rendering is unreliable in php-svg-lib).
+            $legend = '';
+            foreach ($chart['datasets'] ?? [] as $i => $ds) {
+                $color = self::chartColor($i);
+                $legend .= '<span style="color: ' . $color . '; font-size: 11px; margin-right: 10px;">&#9632; '
+                    . text((string)($ds['label'] ?? '')) . '</span>';
+            }
+            if ($legend !== '') {
+                $html .= '<div style="text-align: center; margin-bottom: 4px;">' . $legend . '</div>';
+            }
+
+            $html .= '<div style="text-align: center;">' . self::svgLineChart($chart) . '</div></div>';
+        }
+
+        return $html . '</div>';
+    }
+
+    /**
+     * Attached documents: non-image files are listed in a table; image files
+     * are embedded one per page when GD is available (Dompdf needs GD <img>).
+     */
+    public static function attachedDocumentsHtml(string $cardCode, int $studyId, int $pid): string
+    {
+        if ($cardCode === '' || $studyId <= 0 || $pid <= 0) {
+            return '';
+        }
+
+        require_once __DIR__ . '/CardDocuments.php';
+
+        $attachments = CardDocuments::listForStudy($cardCode, $studyId, $pid);
+        if (empty($attachments)) {
+            return '';
+        }
+
+        $images = [];
+        $others = [];
+        foreach ($attachments as $att) {
+            $mime = strtolower((string)($att['mimetype'] ?? ''));
+            if (str_starts_with($mime, 'image/')) {
+                $images[] = $att;
+            } else {
+                $others[] = $att;
+            }
+        }
+
+        $html = '<div style="page-break-before: always;">'
+            . '<div class="section-title">' . text(xlt('Attached Documents')) . '</div>';
+
+        if (!empty($others)) {
+            $html .= '<table class="fields-table">';
+            foreach ($others as $att) {
+                $html .= '<tr><td class="fl">' . text(xlt('Name')) . '</td><td class="fv">'
+                    . text((string)($att['doc_name'] ?? '')) . '</td>'
+                    . '<td class="fl">' . text(xlt('Date')) . '</td><td class="fv">'
+                    . text(self::formatValue($att['doc_date'] ?? $att['linked_at'] ?? null)) . '</td></tr>'
+                    . '<tr><td class="fl">' . text(xlt('Category')) . '</td><td class="fv">'
+                    . text((string)($att['category_name'] ?? '')) . '</td>'
+                    . '<td class="fl">' . text(xlt('Size')) . '</td><td class="fv">'
+                    . text(CardDocuments::formatBytes((int)($att['size'] ?? 0))) . '</td></tr>';
+            }
+            $html .= '</table>';
+        }
+
+        $canEmbed = extension_loaded('gd');
+        if (!empty($images)) {
+            if (!$canEmbed) {
+                $html .= '<div class="report-text">'
+                    . text(xlt('Image preview requires the GD extension on the server.'))
+                    . '</div>';
+            }
+            foreach (array_slice($images, 0, 12) as $att) {
+                $name = (string)($att['doc_name'] ?? '');
+                $caption = $name . ' — ' . (string)($att['category_name'] ?? '') . ' — '
+                    . self::formatValue($att['doc_date'] ?? $att['linked_at'] ?? null);
+
+                if (!$canEmbed) {
+                    $html .= '<div class="report-text">' . text($caption) . '</div>';
+                    continue;
+                }
+
+                $dataUri = self::imageDataUri((int)($att['document_id'] ?? 0), $pid, $name, (string)($att['mimetype'] ?? ''));
+                if ($dataUri === '') {
+                    $html .= '<div class="report-text">' . text($caption) . '</div>';
+                    continue;
+                }
+
+                $html .= '<div style="page-break-before: always; text-align: center;">'
+                    . '<div style="font-size: 12px; font-weight: bold; color: #475569; margin-bottom: 6px;">'
+                    . text($caption) . '</div>'
+                    . '<img src="' . attr($dataUri) . '" style="max-width: 170mm; max-height: 230mm;">'
+                    . '</div>';
+            }
+        }
+
+        return $html . '</div>';
+    }
+
+    private static function chartColor(int $index): string
+    {
+        $colors = ['#0284c7', '#dc2626', '#16a34a', '#9333ea', '#ea580c', '#0891b2'];
+        return $colors[$index % count($colors)];
+    }
+
+    /**
+     * @param array<string, mixed> $chart CardCharts series structure
+     */
+    private static function svgLineChart(array $chart): string
+    {
+        $width = 520;
+        $height = 180;
+        $padL = 32;
+        $padR = 10;
+        $padT = 10;
+        $padB = 22;
+        $plotW = $width - $padL - $padR;
+        $plotH = $height - $padT - $padB;
+
+        $values = [];
+        foreach ($chart['datasets'] ?? [] as $ds) {
+            foreach ($ds['data'] ?? [] as $v) {
+                if ($v !== null && is_numeric($v)) {
+                    $values[] = (float)$v;
+                }
+            }
+        }
+        if (empty($values)) {
+            return '';
+        }
+
+        $min = isset($chart['y_min']) ? (float)$chart['y_min'] : min($values);
+        $max = isset($chart['y_max']) ? (float)$chart['y_max'] : max($values);
+        if ($max <= $min) {
+            $max = $min + 1;
+        }
+        $range = $max - $min;
+        $min -= $range * 0.1;
+        $max += $range * 0.1;
+
+        $count = max(1, count($chart['labels'] ?? []));
+        $x = static fn(int $i): float => $padL + ($count <= 1 ? $plotW / 2 : ($i / ($count - 1)) * $plotW);
+        $y = static fn(float $v): float => $padT + $plotH - ((($v - $min) / ($max - $min)) * $plotH);
+
+        $svg = '<svg width="' . $width . '" height="' . $height . '" viewBox="0 0 ' . $width . ' ' . $height . '" xmlns="http://www.w3.org/2000/svg">';
+        $svg .= '<line x1="' . $padL . '" y1="' . ($padT + $plotH) . '" x2="' . ($padL + $plotW) . '" y2="' . ($padT + $plotH) . '" stroke="#cbd5e1" stroke-width="1"/>';
+        $svg .= '<line x1="' . $padL . '" y1="' . $padT . '" x2="' . $padL . '" y2="' . ($padT + $plotH) . '" stroke="#cbd5e1" stroke-width="1"/>';
+
+        foreach ($chart['datasets'] ?? [] as $di => $ds) {
+            $color = self::chartColor($di);
+            $segment = [];
+            foreach ($ds['data'] ?? [] as $i => $v) {
+                if ($v === null || !is_numeric($v)) {
+                    if (count($segment) > 1) {
+                        $svg .= '<polyline points="' . implode(' ', $segment) . '" fill="none" stroke="' . $color . '" stroke-width="2"/>';
+                    }
+                    $segment = [];
+                    continue;
+                }
+                $px = round($x($i), 1);
+                $py = round($y((float)$v), 1);
+                $segment[] = $px . ',' . $py;
+                $svg .= '<circle cx="' . $px . '" cy="' . $py . '" r="2.5" fill="' . $color . '"/>';
+            }
+            if (count($segment) > 1) {
+                $svg .= '<polyline points="' . implode(' ', $segment) . '" fill="none" stroke="' . $color . '" stroke-width="2"/>';
+            }
+        }
+
+        return $svg . '</svg>';
+    }
+
+    private static function imageDataUri(int $documentId, int $pid, string $name, string $storedMime): string
+    {
+        if ($documentId <= 0) {
+            return '';
+        }
+
+        require_once CardDocuments::getDocumentClassPath();
+
+        try {
+            $doc = new \Document($documentId);
+            if (!$doc->can_access()) {
+                return '';
+            }
+            $content = $doc->get_data();
+        } catch (\Throwable $e) {
+            return '';
+        }
+
+        if (!is_string($content) || $content === '' || strlen($content) > 8388608) {
+            return '';
+        }
+
+        $view = CardDocuments::resolveViewMime($storedMime, $name);
+        $mime = $view['mime'];
+        if (!str_starts_with($mime, 'image/')) {
+            return '';
+        }
+
+        return 'data:' . $mime . ';base64,' . base64_encode($content);
     }
 
     /**

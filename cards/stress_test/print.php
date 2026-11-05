@@ -304,6 +304,8 @@ ob_start();
 
         <!-- All study fields (complete record) -->
     <?= \OpenEMR\Forms\Cardiology\CardPrintReport::genericSections($study, xlt('Study Data')) ?>
+    <?= \OpenEMR\Forms\Cardiology\CardPrintReport::chartsHtml('stress_test', $studyId, $pid) ?>
+    <?= \OpenEMR\Forms\Cardiology\CardPrintReport::attachedDocumentsHtml('stress_test', $studyId, $pid) ?>
 
     <!-- Disclaimer -->
     <div class="disclaimer">

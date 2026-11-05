@@ -597,6 +597,15 @@ and **Download PDF** (server-side Dompdf via `?download=1`, streamed as
 go through `xl*()`; Spanish translations live in `sql/lang_custom.sql`,
 which is run manually as a standalone script.
 
+After the report body, on their own page(s): **Evolution** charts
+(`CardPrintReport::chartsHtml()`) reuse the `CardCharts` series and draw
+them server-side as inline SVG (Dompdf cannot run Chart.js and GD may be
+absent; SVG via php-svg-lib works without GD), and **Attached Documents**
+(`CardPrintReport::attachedDocumentsHtml()`) lists non-image files and
+embeds image files one per page when GD is available. PDFs are only listed
+(Dompdf cannot merge PDF pages). Without GD, `<img>` tags (logo and
+attached images) are stripped so the download still renders.
+
 ---
 
 ## 9. Card visibility rules (CardRegistry)

@@ -1315,7 +1315,8 @@ INSERT INTO tmp_card_lang (constant_name, definition) VALUES
 ('Calculated: LV Mass / BSA', 'Calculado: masa del VI / SCT'),
 ('Indication for the study', 'Indicación para el estudio'),
 ('Morphology, prostheses, vegetations, etc.', 'Morfología, prótesis, vegetaciones, etc.'),
-('e.g. Anterior hypokinesia', 'p. ej. hipoquinesia anterior');
+('e.g. Anterior hypokinesia', 'p. ej. hipoquinesia anterior'),
+('Image preview requires the GD extension on the server.', 'La vista previa de imágenes requiere la extensión GD en el servidor.');
 
 -- A. Add the source constants that do not exist yet
 INSERT INTO lang_constants (constant_name)

@@ -233,6 +233,10 @@ ob_start();
         [xlt('Comments'), $fv('comments')],
     ], 1, true) ?>
 
+    <!-- Evolution charts (own page) + attached images (own pages) -->
+    <?= CardPrintReport::chartsHtml('echo', $studyId, $pid) ?>
+    <?= CardPrintReport::attachedDocumentsHtml('echo', $studyId, $pid) ?>
+
     <!-- Disclaimer -->
     <div class="disclaimer">
         <?= xlt('Report generated on') ?>: <?= date('d/m/Y H:i:s') ?> | <?= xlt('OpenEMR') ?>

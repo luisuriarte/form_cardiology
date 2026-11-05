@@ -630,6 +630,15 @@ enviado como `Attachment`). Todos los textos del módulo están en inglés
 (USA Hospital) y pasan por `xl*()`; las traducciones al español viven en
 `sql/lang_custom.sql`, que se ejecuta manualmente como script independiente.
 
+Después del cuerpo del informe, en su propia página: gráficos de **Evolución**
+(`CardPrintReport::chartsHtml()`) que reutilizan las series de `CardCharts` y las
+dibujan en el servidor como SVG inline (Dompdf no puede ejecutar Chart.js y GD
+puede no estar; el SVG vía php-svg-lib funciona sin GD), y **Documentos Adjuntos**
+(`CardPrintReport::attachedDocumentsHtml()`) que lista los archivos no-imagen e
+incrusta los archivos de imagen uno por página cuando hay GD. Los PDF solo se
+listan (Dompdf no puede fusionar páginas PDF). Sin GD, las etiquetas `<img>`
+(logo e imágenes adjuntas) se quitan para que la descarga igual se renderice.
+
 ---
 
 ## 10. Reglas de visibilidad de módulos (CardRegistry)
