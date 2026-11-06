@@ -463,6 +463,47 @@ PHP,
     'cards/swap/print.php' => '<?php // stub',
 ])), 'W6S', true);
 
+// COMMENT range vs RANGES mismatch.
+expectRule('W9: COMMENT range vs RANGES mismatch caught', makeRoot('w9comment', withStubs([
+    'table.sql' => <<<'SQL'
+CREATE TABLE IF NOT EXISTS `form_card_test` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
+  `pid` BIGINT NOT NULL COMMENT 'Patient id',
+  `encounter` BIGINT NOT NULL COMMENT 'Encounter number',
+  `cardiology_id` BIGINT NOT NULL COMMENT 'Parent container',
+  `activity` TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Soft delete flag',
+  `status` VARCHAR(10) NOT NULL DEFAULT 'draft' COMMENT 'Workflow status',
+  `study_date` DATETIME NOT NULL COMMENT 'Study date and time',
+  `val` DECIMAL(4,1) DEFAULT NULL COMMENT 'A measurement (0 to 100)',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Test card';
+INSERT IGNORE INTO `card_modules` (`code`, `title`, `icon`, `table_name`, `sort_order`) VALUES
+  ('test', 'Test', 'fa-x', 'form_card_test', 10);
+SQL,
+    'cards/test/save.php' => <<<'PHP'
+<?php
+declare(strict_types=1);
+require_once(__DIR__ . '/../../lib/CardInput.php');
+const RANGES = [
+    'val' => [0.0, 999.0],
+];
+$p = $_POST;
+$val = CardInput::decimal($p['val'] ?? null, 'val');
+$data = [
+    'pid' => 1,
+    'encounter' => 1,
+    'cardiology_id' => 1,
+    'activity' => 1,
+    'status' => 'draft',
+    'study_date' => '2025-01-01 10:00:00',
+    'val' => $val,
+];
+$columns = array_keys($data);
+$sql = 'INSERT INTO `form_card_test` (`' . implode('`, `', $columns) . '`) VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ')';
+sqlInsert($sql, array_values($data));
+PHP,
+])), 'W9', true);
+
 // P1: direct echo of a study value in a print.php.
 expectRule('P1: direct study echo caught', makeRoot('p1', withStubs([
     'table.sql' => $baseTable,
@@ -533,8 +574,7 @@ PHP,
 
 // C3: column present in only one of two core versions. The same case is also
 // a C1 ERROR (used but missing in v2), so exit is 1 with C3 present.
-expectRule('C3: version-only core column caught', makeRoot('c3', [
-    'docs/core_schema/v1.sql' => <<<'SQL'
+expectRule('C3: version-only core column caught', makeRoot('c3', [    'docs/core_schema/v1.sql' => <<<'SQL'
 CREATE TABLE `patient_data` (
   `pid` BIGINT NOT NULL COMMENT 'Pid',
   `newer_col` VARCHAR(32) DEFAULT NULL COMMENT 'Newer',
@@ -552,6 +592,99 @@ SQL,
 sqlQuery('SELECT pid, newer_col FROM `patient_data` WHERE pid = ?', [1]);
 PHP,
 ]), 'C3', true);
+
+// Print label audit: unit detection (bmi kg/m2, hours, mg, no unit).
+function auditUnitFixture(): string
+{
+    return makeRoot('audit_unit', [
+        'table.sql' => <<<'SQL'
+CREATE TABLE IF NOT EXISTS `form_card_unitaudit` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
+  `pid` BIGINT NOT NULL COMMENT 'Patient id',
+  `encounter` BIGINT NOT NULL COMMENT 'Encounter number',
+  `cardiology_id` BIGINT NOT NULL COMMENT 'Parent container',
+  `activity` TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Soft delete flag',
+  `status` VARCHAR(10) NOT NULL DEFAULT 'draft' COMMENT 'Workflow status',
+  `study_date` DATETIME NOT NULL COMMENT 'Date and time the study was performed',
+  `bmi` DECIMAL(4,1) DEFAULT NULL COMMENT 'Body mass index in kg/m2, calculated server-side',
+  `rec` DECIMAL(5,1) DEFAULT NULL COMMENT 'Recording duration in hours',
+  `dose` DECIMAL(5,1) DEFAULT NULL COMMENT 'Current dose in mg',
+  `plain` INT DEFAULT NULL COMMENT 'Plain number',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Unit audit';
+SQL,
+        'cards/unitaudit/print.php' => <<<'PHP'
+<?php
+$study = [];
+$bmi = $study['bmi'] ?? null;
+$rec = $study['rec'] ?? null;
+$dose = $study['dose'] ?? null;
+$plain = $study['plain'] ?? null;
+?>
+<table class="patient-box">
+<tr>
+<td class="label"><?= xlt('BMI (kg/m²)') ?></td>
+<td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($bmi)) ?></td>
+</tr>
+<tr>
+<td class="label"><?= xlt('Recording (hours)') ?></td>
+<td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($rec)) ?></td>
+</tr>
+<tr>
+<td class="label"><?= xlt('Dose (mg)') ?></td>
+<td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($dose)) ?></td>
+</tr>
+<tr>
+<td class="label"><?= xlt('Plain') ?></td>
+<td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($plain)) ?></td>
+</tr>
+</table>
+PHP,
+        'lib/CardPrintReport.php' => '<?php // stub',
+    ]);
+}
+
+$auditRoot = auditUnitFixture();
+$auditChecker = dirname(__DIR__) . '/audit_prints.php';
+$auditOut = [];
+$auditCode = 0;
+exec('php ' . escapeshellarg($auditChecker) . ' --root=' . escapeshellarg($auditRoot) . ' 2>&1', $auditOut, $auditCode);
+$auditText = implode("\n", $auditOut);
+check('audit: bmi kg/m2 unit ok', !str_contains($auditText, 'UNIT-MISMATCH') || !str_contains($auditText, 'bmi'));
+check('audit: bmi kg/m2 not NO-UNIT', $auditCode === 0, "exit $auditCode: $auditText");
+
+$auditRoot2 = makeRoot('audit_unit_mismatch', [
+    'table.sql' => <<<'SQL'
+CREATE TABLE IF NOT EXISTS `form_card_unitaudit` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
+  `pid` BIGINT NOT NULL COMMENT 'Patient id',
+  `encounter` BIGINT NOT NULL COMMENT 'Encounter number',
+  `cardiology_id` BIGINT NOT NULL COMMENT 'Parent container',
+  `activity` TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Soft delete flag',
+  `status` VARCHAR(10) NOT NULL DEFAULT 'draft' COMMENT 'Workflow status',
+  `study_date` DATETIME NOT NULL COMMENT 'Date and time the study was performed',
+  `rec` DECIMAL(5,1) DEFAULT NULL COMMENT 'Recording duration in hours',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Unit mismatch';
+SQL,
+    'cards/unitaudit/print.php' => <<<'PHP'
+<?php
+$study = [];
+$rec = $study['rec'] ?? null;
+?>
+<table class="patient-box">
+<tr>
+<td class="label"><?= xlt('Recording (minutes)') ?></td>
+<td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($rec)) ?></td>
+</tr>
+</table>
+PHP,
+]);
+$auditOut = [];
+$auditCode = 0;
+exec('php ' . escapeshellarg($auditChecker) . ' --root=' . escapeshellarg($auditRoot2) . ' 2>&1', $auditOut, $auditCode);
+$auditText = implode("\n", $auditOut);
+check('audit: hours vs minutes UNIT-MISMATCH flagged', str_contains($auditText, 'UNIT-MISMATCH') && $auditCode === 0, "exit $auditCode");
 
 echo "\n$PASS passed, $FAIL failed\n";
 exit($FAIL > 0 ? 1 : 0);

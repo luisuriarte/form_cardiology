@@ -94,6 +94,31 @@ final class CardPrintReport
     }
 
     /**
+     * Returns the provider license/registration number via UserService,
+     * or an em dash when unavailable.
+     */
+    public static function userLicense(?string $username = null, mixed $userId = null): string
+    {
+        $row = null;
+        try {
+            if (class_exists(UserService::class)) {
+                $service = new UserService();
+                if ($userId !== null && (int)$userId > 0) {
+                    $row = $service->getUser((int)$userId);
+                } elseif ($username !== null && trim($username) !== '') {
+                    $row = $service->getUserByUsername(trim($username));
+                }
+            }
+        } catch (\Throwable $e) {
+            $row = null;
+        }
+        if (is_array($row) && !empty($row['state_license_number'] ?? '')) {
+            return (string)$row['state_license_number'];
+        }
+        return '—';
+    }
+
+    /**
      * Screen-only toolbar with Print (browser dialog) and Download PDF
      * (server-side Dompdf via ?download=1). Hidden when printing.
      */
@@ -719,6 +744,28 @@ final class CardPrintReport
         $html .= '</table>';
 
         return $html;
+    }
+
+    /**
+     * DRAFT banner + diagonal watermark for non-final studies.
+     * $status is the study workflow status; anything but 'final' is draft.
+     */
+    public static function draftBanner(string $status): string
+    {
+        if ($status === 'final') {
+            return '';
+        }
+        $text = xlt('DRAFT - not a final report');
+        return '<div class="draft-banner" style="background:#fee2e2;border:2px solid #dc2626;color:#991b1b;'
+            . 'text-align:center;font-size:18px;font-weight:bold;padding:10px;margin-bottom:12px;letter-spacing:1px;">'
+            . text($text) . '</div>'
+            . '<div class="draft-watermark" aria-hidden="true">' . text($text) . '</div>'
+            . '<style>'
+            . '.draft-watermark{position:fixed;top:45%;left:50%;transform:translate(-50%,-50%) rotate(-30deg);'
+            . 'font-size:64px;font-weight:bold;color:rgba(220,38,38,0.12);white-space:nowrap;z-index:999;'
+            . 'pointer-events:none;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'
+            . '@media screen{.draft-watermark{display:none;}}'
+            . '</style>';
     }
 
     /**

@@ -1318,7 +1318,11 @@ INSERT INTO tmp_card_lang (constant_name, definition) VALUES
 ('e.g. Anterior hypokinesia', 'p. ej. hipoquinesia anterior'),
 ('Image preview requires the GD extension on the server.', 'La vista previa de imágenes requiere la extensión GD en el servidor.'),
 ("Field '%s' is required.", "El campo '%s' es obligatorio."),
-('Sample Type', 'Tipo de muestra');
+('Sample Type', 'Tipo de muestra'),
+('Signature', 'Firma'),
+('INR target range', 'Rango objetivo de INR'),
+('Dose Change (%)', 'Cambio de dosis (%)'),
+('DRAFT - not a final report', 'BORRADOR - no es un informe final');
 
 -- A. Add the source constants that do not exist yet
 INSERT INTO lang_constants (constant_name)

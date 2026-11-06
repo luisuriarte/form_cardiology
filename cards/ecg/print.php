@@ -227,6 +227,7 @@ ob_start();
 <body>
 
     <?= \OpenEMR\Forms\Cardiology\CardPrintReport::toolbarHtml() ?>
+    <?= \OpenEMR\Forms\Cardiology\CardPrintReport::draftBanner($status) ?>
 
     <!-- Institutional Logo + Header -->
     <?php if ($logoBase64): ?>
@@ -273,12 +274,24 @@ ob_start();
             <td class="val"><?= htmlspecialchars($rhythm) ?></td>
         </tr>
         <tr>
+            <td class="label"><?= xlt('Heart Rate (bpm)') ?>:</td>
+            <td class="val"><?= $study['heart_rate_bpm'] !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['heart_rate_bpm'])) . ' bpm' : '—' ?></td>
+            <td class="label"><?= xlt('PR Interval (ms)') ?>:</td>
+            <td class="val"><?= $study['pr_ms'] !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['pr_ms'])) . ' ms' : '—' ?></td>
+        </tr>
+        <tr>
             <td class="label"><?= xlt('QRS Duration (ms)') ?>:</td>
             <td class="val" colspan="3"><?= $qRSComplex !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($qRSComplex)) . ' ms' : '—' ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('QT Interval (ms)') ?>:</td>
             <td class="val"><?= $qTInterval !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($qTInterval)) . ' ms' : '—' ?></td>
+            <td class="label"><?= xlt('QTc Bazett (ms)') ?>:</td>
+            <td class="val"><?= $study['qtc_bazett_ms'] !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['qtc_bazett_ms'])) . ' ms' : '—' ?></td>
+        </tr>
+        <tr>
+            <td class="label"><?= xlt('QTc Fridericia (ms)') ?>:</td>
+            <td class="val"><?= $study['qtc_fridericia_ms'] !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['qtc_fridericia_ms'])) . ' ms' : '—' ?></td>
             <td class="label"><?= xlt('Status') ?>:</td>
             <td class="val" colspan="2"><?= htmlspecialchars(ucfirst($status)) ?></td>
         </tr>

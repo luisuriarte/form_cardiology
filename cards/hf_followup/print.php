@@ -228,6 +228,7 @@ ob_start();
 <body>
 
     <?= \OpenEMR\Forms\Cardiology\CardPrintReport::toolbarHtml() ?>
+    <?= \OpenEMR\Forms\Cardiology\CardPrintReport::draftBanner($status) ?>
 
     <!-- Institutional Logo + Header -->
     <?php if ($logoBase64): ?>
@@ -277,7 +278,13 @@ ob_start();
             <td class="label"><?= xlt('NT-proBNP (pg/mL)') ?>:</td>
             <td class="val"><?= $ntproBNP !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($ntproBNP)) . ' pg/mL' : '—' ?></td>
             <td class="label"><?= xlt('LVEF (%)') ?>:</td>
-            <td class="val"><?= $ejectionFraction !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($ejectionFraction)) . ' %' : '—' ?></td>
+            <td class="val"><?= $ejectionFraction !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($ejectionFraction)) . ' %' : '—' ?><?php if (!empty($study['lvef_date'])) : ?> <span style="color:#64748b; font-size:11px;">(<?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['lvef_date'])) ?>)</span><?php endif; ?></td>
+        </tr>
+        <tr>
+            <td class="label"><?= xlt('Current Weight (kg)') ?>:</td>
+            <td class="val"><?= $study['weight_kg'] !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['weight_kg'])) . ' kg' : '—' ?></td>
+            <td class="label"><?= xlt('Dry Weight (kg)') ?>:</td>
+            <td class="val"><?= $study['dry_weight_kg'] !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['dry_weight_kg'])) . ' kg' : '—' ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('Medications & Doses') ?>:</td>

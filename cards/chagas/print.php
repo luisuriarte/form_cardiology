@@ -258,6 +258,7 @@ ob_start();
 <body>
 
     <?= \OpenEMR\Forms\Cardiology\CardPrintReport::toolbarHtml() ?>
+    <?= \OpenEMR\Forms\Cardiology\CardPrintReport::draftBanner($status) ?>
 
     <!-- Institutional Logo + Header -->
     <?php if ($logoBase64): ?>
@@ -298,6 +299,12 @@ ob_start();
             <td class="val"><?= htmlspecialchars($patient['sex'] ?? '') ?></td>
         </tr>
         <tr>
+            <td class="label"><?= xlt('Study Date & Time') ?>:</td>
+            <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['study_date'] ?? null)) ?></td>
+            <td class="label"><?= xlt('Status') ?>:</td>
+            <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['status'] ?? null)) ?></td>
+        </tr>
+        <tr>
             <td class="label"><?= xlt('Requesting Physician') ?>:</td>
             <td class="val" colspan="3"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::userDisplayName((string)($printEncounter['provider_username'] ?? ''), $printEncounter['provider_id'] ?? null) ?: xlt('Service Physicians')) ?></td>
         </tr>
@@ -307,6 +314,16 @@ ob_start();
     <div class="section-title"><?= xlt('Disease Phase / Clinical Form') ?></div>
     <div class="phase-box">
         <?= chagasVal($phase) ?>
+    </div>
+
+    <div class="section-title"><?= xlt('Overall Serology Status') ?></div>
+    <div class="report-text">
+        <?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['serology_status'] ?? null, 'card_chagas_serology_status')) ?>
+    </div>
+
+    <div class="section-title"><?= xlt('Treatment Status') ?></div>
+    <div class="report-text">
+        <?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['treatment_status'] ?? null, 'card_chagas_treatment_status')) ?>
     </div>
 
     <div class="section-title"><?= xlt('Kuschnir Stage') ?></div>

@@ -467,6 +467,11 @@ final class SchemaChecker
                 if (stripos($inner, 'ALTER TABLE') === false) {
                     continue;
                 }
+                if (stripos($inner, 'ADD COLUMN') === false) {
+                    // MODIFY COLUMN and other ALTER forms need no modelling here.
+                    $handled = true;
+                    continue;
+                }
                 $handled = true;
                 $alter = self::parseAlterAddColumn($inner);
                 if ($alter !== null) {
@@ -2001,16 +2006,17 @@ final class SchemaChecker
         }
     }
 
-    /** Parse RANGES constant entries: 'field' => [min, max] */
+    /** Parse RANGES (and STAGE_RANGES) constant entries: 'field' => [min, max] */
     private function parseRanges(string $src): array
     {
-        if (!preg_match('/const\s+RANGES\s*=\s*\[(.*?)\];/s', $src, $m)) {
-            return [];
-        }
         $ranges = [];
-        if (preg_match_all("/'([a-z_0-9]+)'\s*=>\s*\[\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\]/", $m[1], $mm, PREG_SET_ORDER)) {
-            foreach ($mm as $e) {
-                $ranges[$e[1]] = [(float)$e[2], (float)$e[3]];
+        if (preg_match_all('/const\s+(?:STAGE_)?RANGES\s*=\s*\[(.*?)\];/s', $src, $m)) {
+            foreach ($m[1] as $body) {
+                if (preg_match_all("/'([a-z_0-9]+)'\s*=>\s*\[\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\]/", $body, $mm, PREG_SET_ORDER)) {
+                    foreach ($mm as $e) {
+                        $ranges[$e[1]] = [(float)$e[2], (float)$e[3]];
+                    }
+                }
             }
         }
         return $ranges;
@@ -2025,7 +2031,17 @@ final class SchemaChecker
         $ranges = $this->parseRanges($src);
         foreach ($ranges as $field => [$min, $max]) {
             if (!isset($cols[$field])) {
-                $this->add($rel, 1, 'W8', 'ERROR', "RANGES key '$field' is not a column of `$table`");
+                // STAGE_RANGES fields live on the stage table, not the card table.
+                $inStage = false;
+                foreach ($this->schema['table.sql']['tables'] as $t) {
+                    if (isset($t['columns'][$field])) {
+                        $inStage = true;
+                        break;
+                    }
+                }
+                if (!$inStage) {
+                    $this->add($rel, 1, 'W8', 'ERROR', "RANGES key '$field' is not a column of `$table`");
+                }
                 continue;
             }
             $c = $cols[$field];
@@ -2036,6 +2052,20 @@ final class SchemaChecker
                 if ($min < $capMin || $max > $capMax) {
                     $this->add($rel, 1, 'W9', 'ERROR', "RANGES for `$table`.`$field` [$min, $max] overflows column {$c['type']} (capacity [$capMin, $capMax])");
                 }
+            }
+            // COMMENT range "(a to b)" vs RANGES entry.
+            if (preg_match('/\(\s*(-?[\d.]+)\s+to\s+(-?[\d.]+)\s*\)/', $c['comment'] ?? '', $cm)) {
+                $cMin = (float)$cm[1];
+                $cMax = (float)$cm[2];
+                if (abs($cMin - $min) > 0.0001 || abs($cMax - $max) > 0.0001) {
+                    $this->add($rel, 1, 'W9', 'ERROR', "RANGES for `$table`.`$field` [$min, $max] differ from COMMENT range ($cMin to $cMax) in table.sql");
+                }
+            }
+        }
+        // COMMENT range present but no RANGES entry (and vice versa is W8).
+        foreach ($cols as $field => $c) {
+            if (preg_match('/\(\s*(-?[\d.]+)\s+to\s+(-?[\d.]+)\s*\)/', $c['comment'] ?? '', $cm) && !isset($ranges[$field])) {
+                $this->add($rel, 1, 'W9', 'WARN', "COMMENT range ({$cm[1]} to {$cm[2]}) for `$table`.`$field` has no RANGES entry in save.php");
             }
         }
         // W8 list-backed columns.

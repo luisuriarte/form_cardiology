@@ -486,9 +486,9 @@ Table `form_card_abpm`, 48 columns.
 | office_sbp_mmhg | smallint | yes | Office systolic blood pressure in mmHg (40 to 300) |  | 40–300 | no | no | office_sbp_mmhg |
 | office_dbp_mmhg | smallint | yes | Office diastolic blood pressure in mmHg (20 to 200) |  | 20–200 | no | no | office_dbp_mmhg |
 | office_hr_bpm | smallint | yes | Office heart rate in beats per minute (20 to 250) |  | 20–250 | no | no | office_hr_bpm |
-| sbp_24h | smallint | yes | Mean 24-hour systolic blood pressure in mmHg (40 to 300) |  | 40–300 | no | no | sbp_24h |
-| dbp_24h | smallint | yes | Mean 24-hour diastolic blood pressure in mmHg (20 to 200) |  | 20–200 | no | no | dbp_24h |
-| hr_24h | smallint | yes | Mean 24-hour heart rate in beats per minute (20 to 250) |  | 20–250 | no | no | hr_24h |
+| sbp_24h | smallint | yes | Mean 24-hour systolic blood pressure in mmHg (70 to 250) |  | 70–250 | no | no | sbp_24h |
+| dbp_24h | smallint | yes | Mean 24-hour diastolic blood pressure in mmHg (40 to 150) |  | 40–150 | no | no | dbp_24h |
+| hr_24h | smallint | yes | Mean 24-hour heart rate in beats per minute (30 to 150) |  | 30–150 | no | no | hr_24h |
 | sbp_day | smallint | yes | Mean daytime systolic blood pressure in mmHg (40 to 300) |  | 40–300 | no | no | sbp_day |
 | dbp_day | smallint | yes | Mean daytime diastolic blood pressure in mmHg (20 to 200) |  | 20–200 | no | no | dbp_day |
 | hr_day | smallint | yes | Mean daytime heart rate in beats per minute (20 to 250) |  | 20–250 | no | no | hr_day |

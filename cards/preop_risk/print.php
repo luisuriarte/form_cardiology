@@ -228,6 +228,7 @@ ob_start();
 <body>
 
     <?= \OpenEMR\Forms\Cardiology\CardPrintReport::toolbarHtml() ?>
+    <?= \OpenEMR\Forms\Cardiology\CardPrintReport::draftBanner($status) ?>
 
     <!-- Institutional Logo + Header -->
     <?php if ($logoBase64): ?>
@@ -271,7 +272,17 @@ ob_start();
             <td class="label"><?= xlt('Evaluation Date & Time') ?>:</td>
             <td class="val"><?= htmlspecialchars($assessmentDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($assessmentDate) : '—') ?></td>
             <td class="label"><?= xlt('ASA Physical Status') ?>:</td>
-            <td class="val"><?= htmlspecialchars($asaClass) ?></td>
+            <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($asaClass, 'card_asa_class')) ?></td>
+        </tr>
+        <tr>
+            <td class="label"><?= xlt('Lee RCRI Score') ?>:</td>
+            <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['lee_score'] ?? null)) ?> / 6</td>
+            <td class="label"><?= xlt('Cardiovascular Recommendation') ?>:</td>
+            <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['recommendation'] ?? null, 'card_preop_recommendation')) ?></td>
+        </tr>
+        <tr>
+            <td class="label"><?= xlt('Surgical Urgency') ?>:</td>
+            <td class="val" colspan="3"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['surgery_urgency'] ?? null, 'card_surgery_urgency')) ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('Planned Surgery / Procedure') ?>:</td>

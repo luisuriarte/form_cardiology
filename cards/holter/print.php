@@ -230,6 +230,7 @@ ob_start();
 <body>
 
     <?= \OpenEMR\Forms\Cardiology\CardPrintReport::toolbarHtml() ?>
+    <?= \OpenEMR\Forms\Cardiology\CardPrintReport::draftBanner($status) ?>
 
     <!-- Institutional Logo + Header -->
     <?php if ($logoBase64): ?>

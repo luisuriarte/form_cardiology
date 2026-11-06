@@ -96,6 +96,8 @@ ob_start();
 </head>
 <body>
 
+    <?= CardPrintReport::draftBanner($status) ?>
+
     <?= CardPrintReport::toolbarHtml() ?>
 
     <!-- Institutional Logo + Header -->

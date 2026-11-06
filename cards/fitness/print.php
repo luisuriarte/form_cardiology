@@ -226,6 +226,7 @@ ob_start();
 <body>
 
     <?= \OpenEMR\Forms\Cardiology\CardPrintReport::toolbarHtml() ?>
+    <?= \OpenEMR\Forms\Cardiology\CardPrintReport::draftBanner($status) ?>
 
     <!-- Institutional Logo + Header -->
     <?php if ($logoBase64): ?>
@@ -277,7 +278,40 @@ ob_start();
             <td class="label"><?= xlt('Status') ?>:</td>
             <td class="val" colspan="2"><?= htmlspecialchars(ucfirst($status)) ?></td>
         </tr>
+        <tr>
+            <td class="label"><?= xlt('Fitness Determination') ?>:</td>
+            <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['determination'] ?? null, 'card_fitness_determination')) ?></td>
+            <td class="label"><?= xlt('Valid Until (Expiration Date)') ?>:</td>
+            <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['valid_until'] ?? null)) ?></td>
+        </tr>
+        <tr>
+            <td class="label"><?= xlt('Evaluation Purpose') ?>:</td>
+            <td class="val" colspan="3"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['purpose'] ?? null, 'card_fitness_purpose')) ?></td>
+        </tr>
     </table>
+
+    <!-- Certificate statement, restrictions and signature -->
+    <?php if (!empty($study['restrictions'])) : ?>
+    <div class="section-title"><?= xlt('Activity Restrictions') ?></div>
+    <div class="report-text">
+        <?= nl2br(htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['restrictions'] ?? null))) ?>
+    </div>
+    <?php endif; ?>
+
+    <div class="report-text">
+        <?= sprintf(
+            xlt('Based on the examination performed on %s, the patient is considered %s.'),
+            \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['study_date'] ?? null),
+            \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['determination'] ?? null, 'card_fitness_determination')
+        ) ?>
+    </div>
+
+    <div style="margin-top: 28px; text-align: right;">
+        <div><?= xlt('Cardiologist / Physician') ?>: <strong><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::userDisplayName((string)($printEncounter['provider_username'] ?? ''), $printEncounter['provider_id'] ?? null) ?: xlt('Service Physicians')) ?></strong></div>
+        <div style="margin-top: 40px; border-top: 1px solid #cbd5e1; display: inline-block; padding-top: 6px; min-width: 220px;">
+            <?= xlt('Signature') ?> / <?= xlt('License / Reg. No.') ?>: <?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::userLicense((string)($printEncounter['provider_username'] ?? ''), $printEncounter['provider_id'] ?? null)) ?>
+        </div>
+    </div>
 
         <!-- All study fields (complete record) -->
     <?= \OpenEMR\Forms\Cardiology\CardPrintReport::genericSections($study, xlt('Study Data')) ?>

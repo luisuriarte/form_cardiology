@@ -29,6 +29,7 @@ use OpenEMR\Forms\Cardiology\CardiologyContainer;
 // ---------------------------------------------------------------------------
 require_once(__DIR__ . '/../../lib/CardPrintAssets.php');
 require_once(__DIR__ . '/../../lib/CardPrintReport.php');
+require_once(__DIR__ . '/../../lib/CardAnticoag.php');
 
 $logoBase64 = \OpenEMR\Forms\Cardiology\CardPrintAssets::logoDataUri();
 
@@ -229,6 +230,7 @@ ob_start();
 <body>
 
     <?= \OpenEMR\Forms\Cardiology\CardPrintReport::toolbarHtml() ?>
+    <?= \OpenEMR\Forms\Cardiology\CardPrintReport::draftBanner($status) ?>
 
     <!-- Institutional Logo + Header -->
     <?php if ($logoBase64): ?>
@@ -293,6 +295,19 @@ ob_start();
             <td class="val"><?= htmlspecialchars($lastTestDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($lastTestDate) : '—') ?></td>
             <td class="label"><?= xlt('Status') ?>:</td>
             <td class="val" colspan="2"><?= htmlspecialchars(ucfirst($status)) ?></td>
+        </tr>
+        <tr>
+            <td class="label"><?= xlt('INR target range') ?>:</td>
+            <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['target_inr_low'] ?? null)) ?> – <?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['target_inr_high'] ?? null)) ?></td>
+            <td class="label"><?= xlt('In range') ?>:</td>
+            <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue((function ($s) { return match ($s) { 'in' => xlt('In range'), 'below' => xlt('Below range'), 'above' => xlt('Above range'), default => '—' }; })($study['in_range'] ?? null))) ?></td>
+        </tr>
+        <tr>
+            <td class="label"><?= xlt('Dose Change (%)') ?>:</td>
+            <td class="val"><?= $study['dose_change_pct'] !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['dose_change_pct'])) . ' %' : '—' ?></td>
+            <?php $ttr = \OpenEMR\Forms\Cardiology\CardAnticoag::ttr($pid, (string)($study['study_date'] ?? '')); ?>
+            <td class="label"><?= xlt('Time in Therapeutic Range') ?>:</td>
+            <td class="val"><?= $ttr['ttr_pct'] !== null ? htmlspecialchars((string)$ttr['ttr_pct']) . ' % (' . htmlspecialchars((string)$ttr['days_evaluated']) . ' ' . xlt('Days evaluated') . ')' : xlt($ttr['message'] ?? 'Not enough data') ?></td>
         </tr>
     </table>
 

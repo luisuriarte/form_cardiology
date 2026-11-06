@@ -231,6 +231,7 @@ ob_start();
 <body>
 
     <?= \OpenEMR\Forms\Cardiology\CardPrintReport::toolbarHtml() ?>
+    <?= \OpenEMR\Forms\Cardiology\CardPrintReport::draftBanner($status) ?>
 
     <!-- Institutional Logo + Header -->
     <?php if ($logoBase64): ?>
@@ -278,7 +279,7 @@ ob_start();
         </tr>
         <tr>
             <td class="label"><?= xlt('Exercise Duration (s)') ?>:</td>
-            <td class="val"><?= $duration !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($duration)) . ' min' : '—' ?></td>
+            <td class="val"><?= $duration !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($duration)) . ' s (' . sprintf('%02d:%02d', (int)((float)$duration / 60), (int)((float)$duration % 60)) . ')' : '—' ?></td>
             <td class="label"><?= xlt('Peak HR (bpm)') ?>:</td>
             <td class="val"><?= $peakHeartRate !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($peakHeartRate)) . ' lpm' : '—' ?></td>
         </tr>
@@ -295,6 +296,18 @@ ob_start();
             <td class="val"><?= $maxExercise !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($maxExercise)) . ' METs' : '—' ?></td>
             <td class="label"><?= xlt('Status') ?>:</td>
             <td class="val" colspan="2"><?= htmlspecialchars(ucfirst($status)) ?></td>
+        </tr>
+        <tr>
+            <td class="label"><?= xlt('Result') ?>:</td>
+            <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['result'] ?? null, 'card_stress_result')) ?></td>
+            <td class="label"><?= xlt('Stop Reason') ?>:</td>
+            <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['stop_reason'] ?? null, 'card_stop_reason')) ?></td>
+        </tr>
+        <tr>
+            <td class="label"><?= xlt('Duke Score') ?>:</td>
+            <td class="val"><?= $study['duke_score'] !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['duke_score'])) : '—' ?></td>
+            <td class="label"><?= xlt('ST Elevation (mm)') ?>:</td>
+            <td class="val"><?= $study['st_elevation_mm'] !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['st_elevation_mm'])) . ' mm' : '—' ?></td>
         </tr>
     </table>
 
