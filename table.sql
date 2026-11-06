@@ -669,7 +669,7 @@ CREATE TABLE IF NOT EXISTS `form_card_fitness` (
   `weight_kg` DECIMAL(5,1) DEFAULT NULL COMMENT 'Patient weight in kilograms',
   `heart_rate_bpm` SMALLINT DEFAULT NULL COMMENT 'Resting heart rate in beats per minute',
   `bp_systolic_mmhg` SMALLINT DEFAULT NULL COMMENT 'Resting systolic blood pressure in mmHg',
-  `bp_diastolic_mmhg` SMALLINT DEFAULT NULL COMMENT 'Diastolic blood pressure in mmHg',
+  `bp_diastolic_mmhg` SMALLINT DEFAULT NULL COMMENT 'Resting diastolic blood pressure in mmHg',
   `bmi` DECIMAL(4,1) DEFAULT NULL COMMENT 'Body mass index in kg/m2, calculated server-side',
   `exam_findings` TEXT COMMENT 'Cardiovascular physical examination findings, free text',
   `ecg_result` VARCHAR(32) DEFAULT NULL COMMENT 'Resting 12-lead ECG evaluation result (list_options list_id card_fitness_ecg)',

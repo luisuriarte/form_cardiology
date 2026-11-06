@@ -597,6 +597,51 @@ and **Download PDF** (server-side Dompdf via `?download=1`, streamed as
 go through `xl*()`; Spanish translations live in `sql/lang_custom.sql`,
 which is run manually as a standalone script.
 
+## Quality checks
+
+All checks run without a database (PHP CLI only):
+
+```bash
+bash tools/run_checks.sh
+```
+
+That runs, in order:
+
+1. `php -l` on every PHP file.
+2. `node --check` on every JS file (skipped when node is not installed).
+3. `php tools/tests/run.php` — self-tests for the checker (parser plus one
+   fixture per rule, including the historical 62-columns / 63-slots / 61-params
+   INSERT mismatch).
+4. `php tools/check_schema.php` — the schema checker; it writes the report to
+   `docs/schema_audit.md` and exits 1 when any ERROR exists.
+
+Checker flags: `--only=<prefix>` (e.g. `--only=W`, `--only=S`), `--format=md|text`,
+`--no-live` (skip `docs/live_schema.sql`), `--no-report`, `--out=<file>`.
+
+What each rule means:
+
+- **W1–W10 (writers)**: every column written by `save.php` and other writers
+  exists in the table; INSERT/UPDATE column, value-slot and placeholder counts
+  agree with the parameters; `$data` arrays have no duplicate keys and exclude
+  identity columns on UPDATE; NOT NULL columns without defaults are inserted;
+  `calculated` columns are assigned server-side, never read from POST; variables
+  are assigned before use and named after their column; POST keys match form
+  inputs; `RANGES` keys are columns, list-backed columns are validated with the
+  exact list id from their COMMENT and fit VARCHAR length; ranges fit the
+  column type (DECIMAL/int capacity); finalize logic only names real columns.
+- **R1–R4 (readers)**: SELECT columns exist; study-row keys are real columns;
+  chart fields are numeric columns; seeded cards have their folder files,
+  existing table and existing document category.
+- **S1–S7 (schema sync)**: upgrade-created tables match `table.sql`; conditional
+  ALTERs match `table.sql`; upgrade-created columns are all in `table.sql`;
+  seed rows agree both ways; `table.sql` conventions (no DROP, InnoDB, utf8mb4,
+  comments); upgrade scripts are idempotent; `docs/live_schema.sql` (the real
+  database dump) matches the files — the check that shows what the live
+  database is missing.
+- **UNRESOLVED / UNPARSED** (WARN level, listed under "Not verified"): statements
+  the checker cannot resolve statically (e.g. OpenEMR core tables such as
+  `list_options`/`documents`, which are not part of this module's schema files).
+
 After the report body, on their own page(s): **Evolution** charts
 (`CardPrintReport::chartsHtml()`) reuse the `CardCharts` series and draw
 them server-side as inline SVG (Dompdf cannot run Chart.js and GD may be

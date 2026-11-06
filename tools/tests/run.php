@@ -1,0 +1,420 @@
+<?php
+/**
+ * run.php - Self-tests for tools/check_schema.php
+ *
+ * Builds small fixture repositories in a temp directory, runs the checker
+ * CLI against each, and asserts the expected rule fires (or stays silent).
+ * Exits 1 when any test does not behave as expected.
+ *
+ * Usage: php tools/tests/run.php
+ */
+
+declare(strict_types=1);
+
+require_once dirname(__DIR__) . '/check_schema.php';
+
+$PASS = 0;
+$FAIL = 0;
+$failed = [];
+
+function check(string $name, bool $ok, string $detail = ''): void
+{
+    global $PASS, $FAIL, $failed;
+    if ($ok) {
+        $PASS++;
+        echo "PASS  $name\n";
+    } else {
+        $FAIL++;
+        $failed[] = $name;
+        echo "FAIL  $name" . ($detail !== '' ? " -- $detail" : '') . "\n";
+    }
+}
+
+function makeRoot(string $label, array $files): string
+{
+    $dir = sys_get_temp_dir() . '/card_schema_test_' . $label . '_' . bin2hex(random_bytes(4));
+    foreach ($files as $rel => $content) {
+        $path = $dir . '/' . $rel;
+        $parent = dirname($path);
+        if (!is_dir($parent)) {
+            mkdir($parent, 0777, true);
+        }
+        file_put_contents($path, $content);
+    }
+    return $dir;
+}
+
+/** @return array{0: int, 1: string} exit code + combined output */
+function runChecker(string $root, array $extra = []): array
+{
+    $checker = dirname(__DIR__) . '/check_schema.php';
+    $cmd = 'php ' . escapeshellarg($checker)
+        . ' --root=' . escapeshellarg($root)
+        . ' --no-live --no-report';
+    foreach ($extra as $e) {
+        $cmd .= ' ' . escapeshellarg($e);
+    }
+    $out = [];
+    $code = 0;
+    exec($cmd . ' 2>&1', $out, $code);
+    return [$code, implode("\n", $out)];
+}
+
+function expectRule(string $label, string $root, string $rule, bool $shouldFind): void
+{
+    [$code, $output] = runChecker($root);
+    $found = str_contains($output, $rule);
+    if ($shouldFind) {
+        check($label, $found && $code === 1, "expected $rule and exit 1, got exit $code");
+    } else {
+        check($label, !$found && $code === 0, "expected no $rule and exit 0, got exit $code");
+    }
+}
+
+/** Fixtures that assert a WARN (rule present, exit code 0). */
+function expectWarn(string $label, string $root, string $rule): void
+{
+    [$code, $output] = runChecker($root);
+    check($label, str_contains($output, $rule) && $code === 0, "expected WARN $rule and exit 0, got exit $code");
+}
+
+/** Stub files so R4 does not fire for seeded fixture cards. */
+function cardStubs(): array
+{
+    return [
+        'cards/test/new.php' => '<?php // stub',
+        'cards/test/view.php' => '<?php // stub',
+        'cards/test/print.php' => '<?php // stub',
+        'cards/bug/new.php' => '<?php // stub',
+        'cards/bug/view.php' => '<?php // stub',
+        'cards/bug/print.php' => '<?php // stub',
+    ];
+}
+
+function withStubs(array $files): array
+{
+    return array_merge($files, cardStubs());
+}
+
+// ---------------------------------------------------------------------------
+// Parser unit tests
+// ---------------------------------------------------------------------------
+
+// COMMENT with commas, parentheses, escaped quotes and "list_id <id>" text.
+$tmp = makeRoot('parser_comment', [
+    'table.sql' => <<<'SQL'
+CREATE TABLE IF NOT EXISTS `form_card_test` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key, also stored as forms.form_id',
+  `valve` VARCHAR(32) DEFAULT NULL COMMENT 'Grade (list_options list_id card_valve_grade, scaled 0-3)',
+  `note` TEXT COMMENT 'Free text, with commas (and parentheses) and ''escaped'' quotes',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Test table';
+SQL,
+]);
+$parsed = SchemaChecker::parseSqlFile($tmp . '/table.sql');
+$cols = $parsed['tables'][0]['columns'] ?? [];
+check('parser: COMMENT with commas and parentheses parsed', ($cols['valve']['comment'] ?? '') === 'Grade (list_options list_id card_valve_grade, scaled 0-3)', json_encode($cols['valve'] ?? null));
+check('parser: COMMENT with escaped quotes parsed', ($cols['note']['comment'] ?? '') === "Free text, with commas (and parentheses) and 'escaped' quotes", json_encode($cols['note'] ?? null));
+check('parser: display width normalized int(11)==int', SchemaChecker::normalizeType('int', '11', false) === SchemaChecker::normalizeType('int', '', false));
+check('parser: tinyint(1) kept distinct', SchemaChecker::normalizeType('tinyint', '1', false) === 'tinyint(1)' && SchemaChecker::normalizeType('tinyint', '4', false) === 'tinyint');
+
+// Conditional ALTER pattern.
+$tmp = makeRoot('parser_alter', [
+    'table.sql' => <<<'SQL'
+CREATE TABLE IF NOT EXISTS `card_modules` (
+  `code` VARCHAR(32) NOT NULL COMMENT 'Code (list_options list_id lists)',
+  `card_type` VARCHAR(10) NOT NULL DEFAULT 'study' COMMENT 'Module type: study or tool',
+  PRIMARY KEY (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Modules';
+SQL,
+    'sql/upgrade_001_x.sql' => <<<'SQL'
+SET @card_type_exists := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'card_modules' AND COLUMN_NAME = 'card_type'
+);
+SET @card_type_sql := IF(
+  @card_type_exists = 0,
+  'ALTER TABLE `card_modules` ADD COLUMN `card_type` VARCHAR(10) NOT NULL DEFAULT ''study'' COMMENT ''Module type: study or tool'' AFTER `code`',
+  'SELECT 1'
+);
+PREPARE card_type_stmt FROM @card_type_sql;
+EXECUTE card_type_stmt;
+DEALLOCATE PREPARE card_type_stmt;
+SQL,
+]);
+$parsed = SchemaChecker::parseSqlFile($tmp . '/sql/upgrade_001_x.sql');
+check('parser: conditional ALTER extracted', count($parsed['alters']) === 1 && ($parsed['alters'][0]['column']['name'] ?? '') === 'card_type', json_encode($parsed['alters']));
+if (!empty($parsed['alters'])) {
+    $col = $parsed['alters'][0]['column'];
+    check('parser: conditional ALTER definition complete (default + comment)', $col['default'] === "'study'" && $col['comment'] === 'Module type: study or tool', json_encode($col));
+}
+
+// ---------------------------------------------------------------------------
+// Rule fixtures (each in its own minimal repo root)
+// ---------------------------------------------------------------------------
+
+$baseTable = <<<'SQL'
+CREATE TABLE IF NOT EXISTS `form_card_test` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
+  `pid` BIGINT NOT NULL COMMENT 'Patient id',
+  `encounter` BIGINT NOT NULL COMMENT 'Encounter number',
+  `cardiology_id` BIGINT NOT NULL COMMENT 'Parent container',
+  `user` VARCHAR(255) DEFAULT NULL COMMENT 'Username',
+  `activity` TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Soft delete flag',
+  `status` VARCHAR(10) NOT NULL DEFAULT 'draft' COMMENT 'Workflow status',
+  `study_date` DATETIME NOT NULL COMMENT 'Study date and time',
+  `val` DECIMAL(4,1) DEFAULT NULL COMMENT 'A measurement, calculated server-side',
+  `grade` VARCHAR(32) DEFAULT NULL COMMENT 'Grade (list_options list_id card_valve_grade)',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Test card';
+INSERT IGNORE INTO `card_modules` (`code`, `title`, `icon`, `table_name`, `sort_order`) VALUES
+  ('test', 'Test', 'fa-x', 'form_card_test', 10);
+INSERT IGNORE INTO `list_options` (`list_id`, `option_id`, `title`, `seq`, `is_default`, `activity`) VALUES
+  ('lists', 'card_valve_grade', 'Cardiology - Valve grade', 0, 0, 1),
+  ('card_valve_grade', 'none', 'None', 10, 1, 1),
+  ('card_valve_grade', 'mild', 'Mild', 20, 0, 1);
+SQL;
+
+$saveHeader = <<<'PHP'
+<?php
+declare(strict_types=1);
+require_once(__DIR__ . '/../../lib/CardInput.php');
+const RANGES = [
+    'val' => [0.0, 999.0],
+];
+$p = $_POST;
+$pid = 1;
+PHP;
+
+// 1. Placeholder count mismatch: one extra ?
+expectRule('W2: placeholder mismatch caught', makeRoot('w2', withStubs([
+    'table.sql' => $baseTable,
+    'cards/test/save.php' => $saveHeader . <<<'PHP'
+$val = CardInput::decimal($p['val'] ?? null, 'val');
+sqlInsert(
+    'INSERT INTO `form_card_test` (`pid`, `encounter`, `cardiology_id`, `user`, `study_date`, `val`)
+     VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [$pid, 1, 1, 'admin', '2025-01-01 10:00:00', $val]
+);
+PHP,
+])), 'W2', true);
+
+// 2. Unknown column in an INSERT.
+expectRule('W1: unknown column caught', makeRoot('w1', withStubs([
+    'table.sql' => $baseTable,
+    'cards/test/save.php' => $saveHeader . <<<'PHP'
+$val = CardInput::decimal($p['val'] ?? null, 'val');
+$data = [
+    'pid' => $pid,
+    'encounter' => 1,
+    'cardiology_id' => 1,
+    'user' => 'admin',
+    'study_date' => '2025-01-01 10:00:00',
+    'nope_col' => $val,
+];
+$columns = array_keys($data);
+$sql = 'INSERT INTO `form_card_test` (`' . implode('`, `', $columns) . '`) VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ')';
+sqlInsert($sql, array_values($data));
+PHP,
+])), 'W1', true);
+
+// 3. Key repeated in a $data array.
+expectRule('W3: duplicate key caught', makeRoot('w3dup', withStubs([
+    'table.sql' => $baseTable,
+    'cards/test/save.php' => $saveHeader . <<<'PHP'
+$val = CardInput::decimal($p['val'] ?? null, 'val');
+$data = [
+    'pid' => $pid,
+    'pid' => $pid,
+    'encounter' => 1,
+    'cardiology_id' => 1,
+    'user' => 'admin',
+    'study_date' => '2025-01-01 10:00:00',
+    'val' => $val,
+];
+$columns = array_keys($data);
+$sql = 'INSERT INTO `form_card_test` (`' . implode('`, `', $columns) . '`) VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ')';
+sqlInsert($sql, array_values($data));
+PHP,
+])), 'W3', true);
+
+// 4. NOT NULL column missing from an INSERT.
+expectRule('W4: missing NOT NULL column caught', makeRoot('w4', withStubs([
+    'table.sql' => $baseTable,
+    'cards/test/save.php' => $saveHeader . <<<'PHP'
+$data = [
+    'pid' => $pid,
+    'encounter' => 1,
+    'cardiology_id' => 1,
+    'user' => 'admin',
+    'val' => null,
+];
+$columns = array_keys($data);
+$sql = 'INSERT INTO `form_card_test` (`' . implode('`, `', $columns) . '`) VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ')';
+sqlInsert($sql, array_values($data));
+PHP,
+])), 'W4', true);
+
+// 5. Calculated column read from POST (WARN; exit stays 0).
+expectWarn('W5: calculated column from POST caught', makeRoot('w5', withStubs([
+    'table.sql' => $baseTable,
+    'cards/test/save.php' => $saveHeader . <<<'PHP'
+$val = CardInput::decimal($p['val'] ?? null, 'val');
+$grade = CardInput::listOption('card_valve_grade', $p['grade'] ?? null, 'grade');
+$data = [
+    'pid' => $pid,
+    'encounter' => 1,
+    'cardiology_id' => 1,
+    'user' => 'admin',
+    'study_date' => '2025-01-01 10:00:00',
+    'val' => $val,
+    'grade' => $grade,
+];
+$columns = array_keys($data);
+$sql = 'INSERT INTO `form_card_test` (`' . implode('`, `', $columns) . '`) VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ')';
+sqlInsert($sql, array_values($data));
+PHP,
+    'cards/test/_form_fields.php' => '<input type="text" name="val"><input type="text" name="grade"><input type="text" name="study_date">',
+])), 'W5');
+
+// 6. Range that overflows DECIMAL(4,1).
+expectRule('W9: DECIMAL overflow range caught', makeRoot('w9', withStubs([
+    'table.sql' => $baseTable,
+    'cards/test/save.php' => <<<'PHP'
+<?php
+declare(strict_types=1);
+require_once(__DIR__ . '/../../lib/CardInput.php');
+const RANGES = [
+    'val' => [0.0, 5000.0],
+];
+$p = $_POST;
+$val = CardInput::decimal($p['val'] ?? null, 'val');
+$data = [
+    'pid' => 1,
+    'encounter' => 1,
+    'cardiology_id' => 1,
+    'user' => 'admin',
+    'study_date' => '2025-01-01 10:00:00',
+    'val' => $val,
+];
+$columns = array_keys($data);
+$sql = 'INSERT INTO `form_card_test` (`' . implode('`, `', $columns) . '`) VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ')';
+sqlInsert($sql, array_values($data));
+PHP,
+])), 'W9', true);
+
+// 7. List id not matching the COMMENT.
+expectRule('W8: list id mismatch caught', makeRoot('w8', withStubs([
+    'table.sql' => $baseTable,
+    'cards/test/save.php' => $saveHeader . <<<'PHP'
+$grade = CardInput::listOption('card_other_list', $p['grade'] ?? null, 'grade');
+$data = [
+    'pid' => 1,
+    'encounter' => 1,
+    'cardiology_id' => 1,
+    'user' => 'admin',
+    'study_date' => '2025-01-01 10:00:00',
+    'grade' => $grade,
+];
+$columns = array_keys($data);
+$sql = 'INSERT INTO `form_card_test` (`' . implode('`, `', $columns) . '`) VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ')';
+sqlInsert($sql, array_values($data));
+PHP,
+])), 'W8', true);
+
+// 8. Table created in an upgrade but different in table.sql.
+expectRule('S1: upgrade-created table differs caught', makeRoot('s1', [
+    'table.sql' => <<<'SQL'
+CREATE TABLE IF NOT EXISTS `form_card_upgrade` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
+  `val` INT DEFAULT NULL COMMENT 'A value',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Upgrade table';
+SQL,
+    'sql/upgrade_001_x.sql' => <<<'SQL'
+CREATE TABLE IF NOT EXISTS `form_card_upgrade` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
+  `val` BIGINT DEFAULT NULL COMMENT 'A value',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Upgrade table';
+SQL,
+]), 'S1', true);
+
+// 9. ALTER column missing in table.sql.
+expectRule('S2: ALTER column missing caught', makeRoot('s2', [
+    'table.sql' => <<<'SQL'
+CREATE TABLE IF NOT EXISTS `form_card_test` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Test';
+SQL,
+    'sql/upgrade_001_x.sql' => <<<'SQL'
+SET @x_exists := (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'form_card_test' AND COLUMN_NAME = 'extra_col'
+);
+SET @x_sql := IF(
+  @x_exists = 0,
+  'ALTER TABLE `form_card_test` ADD COLUMN `extra_col` INT DEFAULT NULL COMMENT ''Extra''',
+  'SELECT 1'
+);
+PREPARE x_stmt FROM @x_sql;
+EXECUTE x_stmt;
+DEALLOCATE PREPARE x_stmt;
+SQL,
+]), 'S2', true);
+
+// 10. DROP TABLE in table.sql.
+expectRule('S5: DROP TABLE caught', makeRoot('s5', [
+    'table.sql' => <<<'SQL'
+DROP TABLE `form_card_test`;
+CREATE TABLE IF NOT EXISTS `form_card_test` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Test';
+SQL,
+]), 'S5', true);
+
+// 11+12. Positive: COMMENT parsing and conditional ALTER stay silent.
+expectRule('parser fixtures stay silent', makeRoot('positive', [
+    'table.sql' => <<<'SQL'
+CREATE TABLE IF NOT EXISTS `form_card_test` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key, also stored as forms.form_id',
+  `note` TEXT COMMENT 'Free text, with commas (and parentheses) and ''escaped'' quotes',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Test';
+SQL,
+]), 'S1', false);
+
+// 13. The original bug: 62 columns, 63 value slots, 61 parameters.
+$cols62 = [];
+$slots63 = [];
+$params61 = [];
+for ($i = 1; $i <= 62; $i++) {
+    $cols62[] = "c$i";
+}
+for ($i = 1; $i <= 63; $i++) {
+    $slots63[] = '?';
+}
+for ($i = 1; $i <= 61; $i++) {
+    $params61[] = "\$v$i";
+}
+$colDefs = [];
+foreach ($cols62 as $cn) {
+    $colDefs[] = "`$cn` INT DEFAULT NULL COMMENT 'Column $cn'";
+}
+$bugTable = "CREATE TABLE IF NOT EXISTS `form_card_bug` (\n"
+    . "  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',\n"
+    . implode(",\n", $colDefs) . "\n"
+    . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Bug repro';\n"
+    . "INSERT IGNORE INTO `card_modules` (`code`, `title`, `icon`, `table_name`, `sort_order`) VALUES\n"
+    . "  ('bug', 'Bug', 'fa-x', 'form_card_bug', 10);\n";
+$bugSave = "<?php\ndeclare(strict_types=1);\n"
+    . "sqlInsert('INSERT INTO `form_card_bug` (" . implode(', ', $cols62) . ") VALUES (" . implode(', ', $slots63) . ")', [" . implode(', ', $params61) . "]);\n";
+expectRule('original bug 62/63/61 caught', makeRoot('bug', withStubs([
+    'table.sql' => $bugTable,
+    'cards/bug/save.php' => $bugSave,
+])), 'W2', true);
+
+echo "\n$PASS passed, $FAIL failed\n";
+exit($FAIL > 0 ? 1 : 0);
