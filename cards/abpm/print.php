@@ -269,21 +269,21 @@ ob_start();
             <td class="val"><?= htmlspecialchars($study['patient_sex'] ?? '') ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Recording Date') ?>:</td>
+            <td class="label"><?= xlt('Study Date & Time') ?>:</td>
             <td class="val"><?= htmlspecialchars($recordingDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($recordingDate) : '—') ?></td>
-            <td class="label"><?= xlt('Recording Time') ?>:</td>
+            <td class="label"><?= xlt('Daytime Start Time') ?>:</td>
             <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($recordTime)) ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Monitor Hours') ?>:</td>
+            <td class="label"><?= xlt('Recording Duration (hours)') ?>:</td>
             <td class="val"><?= $monitorHours !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($monitorHours)) . ' h' : '—' ?></td>
-            <td class="label"><?= xlt('Mean SBP') ?>:</td>
+            <td class="label"><?= xlt('24-Hour Systolic Blood Pressure (mmHg)') ?>:</td>
             <td class="val"><?= $meanSbp !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($meanSbp)) . ' mmHg' : '—' ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Mean DBP') ?>:</td>
+            <td class="label"><?= xlt('24-Hour Diastolic Blood Pressure (mmHg)') ?>:</td>
             <td class="val"><?= $meanDbp !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($meanDbp)) . ' mmHg' : '—' ?></td>
-            <td class="label"><?= xlt('Heart Rate') ?>:</td>
+            <td class="label"><?= xlt('24-Hour Heart Rate (bpm)') ?>:</td>
             <td class="val"><?= $heartRate !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($heartRate)) . ' lpm' : '—' ?></td>
         </tr>
         <tr>

@@ -1365,6 +1365,117 @@ final class SchemaChecker
             }
             $this->checkWriterFile($rel, $src);
         }
+        // C6: demo data SQL is checked with the writer rules.
+        $demo = $this->root . '/tools/demo_data.sql';
+        if (is_file($demo)) {
+            $this->checkDemoData('tools/demo_data.sql', file_get_contents($demo));
+        }
+    }
+
+    /**
+     * C6: INSERT statements in tools/demo_data.sql vs W1/W2/W4/W9/list/range,
+     * with RANGES taken from each card's save.php when available.
+     */
+    private function checkDemoData(string $rel, string $sql): void
+    {
+        $stripped = self::stripComments($sql);
+        foreach (self::splitStatements($stripped) as $st) {
+            $stmt = trim($st['sql']);
+            $line = $st['line'];
+            if (!preg_match('/^INSERT\s+(?:IGNORE\s+)?INTO\s+`([^`]+)`\s*\(([^)]*)\)/is', $stmt, $m)) {
+                continue;
+            }
+            $table = $m[1];
+            $cols = array_map(static fn($c) => trim(trim($c, " \t`"), " \t\r\n"), explode(',', $m[2]));
+            $model = $this->columnsOf($table);
+            if (empty($model)) {
+                $model = $this->schema['upgrades']['tables'][$table]['columns'] ?? [];
+            }
+            if (empty($model)) {
+                $this->add($rel, $line, 'W1', 'UNRESOLVED', "Cannot verify columns of `$table` (not in schema model)");
+                continue;
+            }
+            foreach ($cols as $c) {
+                if (!isset($model[$c])) {
+                    $this->add($rel, $line, 'W1', 'ERROR', "Table `$table`: column `$c` does not exist");
+                }
+            }
+            // W2: columns vs value slots (variables like @demo_pid count as slots).
+            $rows = self::parseInsertRows($stmt, $table);
+            // parseInsertRows needs VALUES syntax; demo INSERTs use plain VALUES.
+            if ($rows !== null) {
+                foreach ($rows['rows'] as $r) {
+                    $slots = count(explode('|', $r));
+                    if ($slots !== count($cols)) {
+                        $this->add($rel, $line, 'W2', 'ERROR', "Table `$table`: INSERT has " . count($cols) . " columns but $slots value slots");
+                    }
+                }
+            }
+            // W4: NOT NULL without default present.
+            foreach ($model as $cname => $c) {
+                if ($c['not_null'] && $c['default'] === null && !$c['auto_increment'] && !in_array($cname, $cols, true)) {
+                    $this->add($rel, $line, 'W4', 'ERROR', "Table `$table`: NOT NULL column `$cname` without DEFAULT is missing from INSERT");
+                }
+            }
+            // W9 + range/list checks from RANGES of the owning card.
+            $card = $this->cardForTable($table);
+            if ($card !== null) {
+                $save = $this->root . '/cards/' . $card . '/save.php';
+                $ranges = is_file($save) ? $this->parseRanges(file_get_contents($save)) : [];
+                if ($rows !== null) {
+                    foreach ($rows['rows'] as $r) {
+                        $vals = explode('|', $r);
+                        foreach ($cols as $i => $cname) {
+                            $val = $vals[$i] ?? '';
+                            if (isset($ranges[$cname]) && is_numeric($val)) {
+                                [$min, $max] = $ranges[$cname];
+                                if ((float)$val < $min || (float)$val > $max) {
+                                    $this->add($rel, $line, 'W9', 'ERROR', "Value $val for `$table`.`$cname` is outside RANGES [$min, $max]");
+                                }
+                            }
+                            if (isset($model[$cname]) && preg_match('/list_id\s+([a-z_0-9]+)/i', $model[$cname]['comment'] ?? '', $lm)) {
+                                $allowed = $this->seedOptions($lm[1]);
+                                if ($val !== 'NULL' && $val !== '' && !in_array($val, $allowed, true)) {
+                                    $this->add($rel, $line, 'W8', 'ERROR', "Value '$val' for `$table`.`$cname` is not an option of list {$lm[1]}");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private function cardForTable(string $table): ?string
+    {
+        foreach (glob($this->root . '/cards/*/save.php') ?: [] as $abs) {
+            $card = basename(dirname($abs));
+            if ($this->cardTable($card) === $table) {
+                return $card;
+            }
+        }
+        return null;
+    }
+
+    /** @return string[] option ids of a list from table.sql seeds */
+    private function seedOptions(string $listId): array
+    {
+        $out = [];
+        foreach (($this->schema['table.sql']['seeds'] ?? []) as $s) {
+            if (($s['table'] ?? '') !== 'list_options') {
+                continue;
+            }
+            $cols = $s['columns'] ?? [];
+            $li = array_search('list_id', $cols, true);
+            $oi = array_search('option_id', $cols, true);
+            foreach (($s['rows'] ?? []) as $r) {
+                $p = explode('|', $r);
+                if (($p[$li] ?? '') === $listId && $oi !== false) {
+                    $out[] = $p[$oi];
+                }
+            }
+        }
+        return $out;
     }
 
     private function checkWriterFile(string $rel, string $src): void
@@ -2056,6 +2167,15 @@ final class SchemaChecker
                 continue;
             }
             $this->checkReaderFile($rel, $src);
+            if (basename($rel) === 'print.php' || basename($rel) === 'view.php' || basename($rel) === 'new.php') {
+                $this->checkPrintValues($rel, $src);
+            }
+            if (str_ends_with($rel, '.php') && (str_contains($rel, 'cards/') || str_contains($rel, 'templates/') || str_starts_with($rel, 'lib/'))) {
+                $this->checkBareConstants($rel, $src);
+            }
+            if (basename($rel) === 'print.php' || basename($rel) === 'view.php') {
+                $this->checkUndefinedVars($rel, $src);
+            }
         }
         $this->checkChartsFiles();
         $this->checkCardSeeds();
@@ -2149,6 +2269,260 @@ final class SchemaChecker
         }
         return $aliases;
     }
+
+    /**
+     * P1: in print.php, rendered study values must go through
+     * CardPrintReport::formatValue(). Flags direct echoes of $study[...],
+     * (int)/(float) casts of clinical values and ?: 0 / ?? 0 defaults.
+     */
+    private function checkPrintValues(string $rel, string $src): void
+    {
+        if (basename($rel) !== 'print.php') {
+            return;
+        }
+        if (preg_match_all('/<\?=(.*?)\?>/s', $src, $m, PREG_OFFSET_CAPTURE)) {
+            foreach ($m[1] as [$expr, $off]) {
+                $line = substr_count(substr($src, 0, $off), "\n") + 1;
+                if (str_contains($expr, 'CardPrintReport::formatValue') || str_contains($expr, 'formatValue(') || str_contains($expr, 'userDisplayName(')) {
+                    continue;
+                }
+                if (preg_match_all('/\$study\[\'([a-z_0-9]+)\'\]/', $expr, $sm)) {
+                    foreach (array_unique($sm[1]) as $key) {
+                        if (preg_match('/^(patient_|encounter_|batch_|report_title)/', $key)) {
+                            continue; // virtual header keys injected from services
+                        }
+                        $this->add($rel, $line, 'P1', 'ERROR', "Printed value from \$study['$key'] does not go through CardPrintReport::formatValue()");
+                    }
+                }
+                if (preg_match('/\(\s*(int|float)\s*\)\s*\$study/', $expr)) {
+                    $this->add($rel, $line, 'P1', 'ERROR', 'Printed value casts a clinical value with (int)/(float)');
+                }
+                if (preg_match('/\?\? 0\b|:\s*0\b/', $expr)) {
+                    $this->add($rel, $line, 'P1', 'ERROR', 'Printed value uses a 0 default (missing values must print as an em dash)');
+                }
+            }
+        }
+    }
+
+    /**
+     * P2: undefined bare constants (e.g. a missing $ in leadII).
+     * Uses token_get_all; whitelist = PHP built-in constants + repo-defined
+     * define()/const names + static class contexts.
+     */
+    private function checkBareConstants(string $rel, string $src): void
+    {
+        static $whitelist = null;
+        if ($whitelist === null) {
+            $whitelist = [];
+            foreach (get_defined_constants(true) as $cat) {
+                foreach (array_keys($cat) as $k) {
+                    $whitelist[strtolower($k)] = true;
+                }
+            }
+            foreach (['true', 'false', 'null'] as $k) {
+                $whitelist[$k] = true;
+            }
+            // Repo-defined constants (define('X') and const X / const at file scope).
+            $scan = '';
+            foreach ($this->phpFiles() as $abs) {
+                $scan .= file_get_contents($abs) . "\n";
+            }
+            if (preg_match_all("/define\\s*\\(\\s*'([^']+)'/", $scan, $m)) {
+                foreach ($m[1] as $k) {
+                    $whitelist[strtolower($k)] = true;
+                }
+            }
+            if (preg_match_all('/\bconst\s+([A-Z_][A-Z_0-9]*)\b/', $scan, $m)) {
+                foreach ($m[1] as $k) {
+                    $whitelist[strtolower($k)] = true;
+                }
+            }
+        }
+
+        $tokens = token_get_all($src);
+        $n = count($tokens);
+        for ($i = 0; $i < $n; $i++) {
+            $t = $tokens[$i];
+            if (!is_array($t) || $t[0] !== T_STRING) {
+                continue;
+            }
+            $name = $t[1];
+            $next = $this->nextMeaningful($tokens, $i + 1);
+            $prev = $this->prevMeaningful($tokens, $i - 1);
+            $nextTxt = $next !== null && !is_array($tokens[$next]) ? $tokens[$next] : '';
+            $prevId = $prev !== null && is_array($tokens[$prev]) ? $tokens[$prev][0] : null;
+            $nextId = $next !== null && is_array($tokens[$next]) ? $tokens[$next][0] : null;
+            $prevTxt = $prev !== null && !is_array($tokens[$prev]) ? $tokens[$prev] : '';
+            if ($nextTxt === '(' || $nextTxt === '::' || $nextTxt === '\\' || $nextId === T_DOUBLE_COLON) {
+                continue;
+            }
+            // declare(strict_types=1) and named arguments: T_STRING before '='.
+            if ($nextTxt === '=') {
+                continue;
+            }
+            if ($prevId !== null && in_array($prevId, [T_FUNCTION, T_CLASS, T_INTERFACE, T_TRAIT, T_ENUM, T_NAMESPACE, T_USE, T_EXTENDS, T_IMPLEMENTS, T_INSTANCEOF, T_NEW, T_DOUBLE_COLON, T_OBJECT_OPERATOR, T_CONST, T_DECLARE, T_NS_SEPARATOR, T_FN, T_CATCH], true)) {
+                continue;
+            }
+            // Language constructs: typed parameters/returns (string $x, : string),
+            // array keys in lists, attributes, etc.
+            if ($nextId === T_VARIABLE) {
+                continue;
+            }
+            if ($prevTxt === '?' || $prevTxt === ':' || $prevTxt === '|') {
+                continue;
+            }
+            if ($prev !== null && !is_array($tokens[$prev]) && $tokens[$prev] === '::') {
+                continue;
+            }
+            if (isset($whitelist[strtolower($name)])) {
+                continue;
+            }
+            // Clinic configuration constants used behind defined() guards.
+            if (preg_match('/defined\s*\(\s*[\'"]' . preg_quote($name, '/') . '[\'"]\s*\)/', $src)) {
+                continue;
+            }
+            $line = $t[2] ?? (substr_count(substr($src, 0, 0), "\n") + 1);
+            $offsets = $this->tokenOffsets($tokens);
+            $line = substr_count(substr($src, 0, $offsets[$i]), "\n") + 1;
+            $this->add($rel, $line, 'P2', 'ERROR', "Possible undefined constant '$name' (bare T_STRING without \$, e.g. missing \$ in a variable name)");
+        }
+    }
+
+    private function prevMeaningful(array $tokens, int $i): ?int
+    {
+        for (; $i >= 0; $i--) {
+            $t = $tokens[$i];
+            if (is_array($t) && in_array($t[0], [T_WHITESPACE, T_COMMENT, T_DOC_COMMENT], true)) {
+                continue;
+            }
+            return $i;
+        }
+        return null;
+    }
+
+    /** @return int[] byte offset of each token */
+    private function tokenOffsets(array $tokens): array
+    {
+        $offsets = [];
+        $pos = 0;
+        foreach ($tokens as $i => $t) {
+            $offsets[$i] = $pos;
+            $pos += strlen(is_array($t) ? $t[1] : $t);
+        }
+        return $offsets;
+    }
+
+    /**
+     * P3: variables used in print.php/view.php that are never assigned in
+     * that file or in a file it includes (require/include inside the repo).
+     */
+    private function checkUndefinedVars(string $rel, string $src): void
+    {
+        $assigned = [];
+        $collect = static function (string $code, array &$assigned): void {
+            $tokens = token_get_all($code);
+            $n = count($tokens);
+            for ($i = 0; $i < $n; $i++) {
+                $t = $tokens[$i];
+                if (!is_array($t)) {
+                    continue;
+                }
+                if ($t[0] === T_VARIABLE) {
+                    $next = null;
+                    for ($j = $i + 1; $j < $n; $j++) {
+                        if (is_array($tokens[$j]) && in_array($tokens[$j][0], [T_WHITESPACE, T_COMMENT], true)) {
+                            continue;
+                        }
+                        $next = $tokens[$j];
+                        break;
+                    }
+                    if ($next === '=' || (is_array($next) && in_array($next[0], [T_CONCAT_EQUAL, T_PLUS_EQUAL, T_MINUS_EQUAL, T_MUL_EQUAL, T_DIV_EQUAL], true))) {
+                        $assigned[$t[1]] = true;
+                    }
+                }
+                if ($t[0] === T_FOREACH) {
+                    // foreach (... as $v) / ($k => $v)
+                    for ($j = $i; $j < min($n, $i + 40); $j++) {
+                        if (is_array($tokens[$j]) && $tokens[$j][0] === T_VARIABLE) {
+                            $assigned[$tokens[$j][1]] = true;
+                        }
+                        if (!is_array($tokens[$j]) && $tokens[$j] === ')') {
+                            break;
+                        }
+                    }
+                }
+                if ($t[0] === T_FUNCTION || $t[0] === T_FN) {
+                    $depth = 0;
+                    $seen = false;
+                    for ($j = $i; $j < min($n, $i + 200); $j++) {
+                        $txt = is_array($tokens[$j]) ? $tokens[$j][1] : $tokens[$j];
+                        if ($txt === '(') {
+                            $seen = true;
+                            $depth++;
+                        } elseif ($txt === ')') {
+                            $depth--;
+                            if ($seen && $depth === 0) {
+                                break;
+                            }
+                        } elseif ($seen && is_array($tokens[$j]) && $tokens[$j][0] === T_VARIABLE) {
+                            $assigned[$tokens[$j][1]] = true;
+                        }
+                    }
+                }
+                if ($t[0] === T_LIST) {
+                    $depth = 0;
+                    for ($j = $i; $j < min($n, $i + 40); $j++) {
+                        $txt = is_array($tokens[$j]) ? $tokens[$j][1] : $tokens[$j];
+                        if ($txt === '(') {
+                            $depth++;
+                        } elseif ($txt === ')') {
+                            $depth--;
+                            if ($depth === 0) {
+                                break;
+                            }
+                        } elseif ($depth > 0 && is_array($tokens[$j]) && $tokens[$j][0] === T_VARIABLE) {
+                            $assigned[$tokens[$j][1]] = true;
+                        }
+                    }
+                }
+            }
+        };
+        $collect($src, $assigned);
+        // Follow includes inside the repository.
+        if (preg_match_all('/(?:require|require_once|include|include_once)\s*(?:\(\s*)?(?:__DIR__\s*\.\s*)?\'([^\']+\.php)\'/', $src, $m)) {
+            $base = dirname($this->root . '/' . $rel);
+            foreach ($m[1] as $inc) {
+                $p = $base . '/' . ltrim($inc, '/');
+                if (is_file($p)) {
+                    $collect(file_get_contents($p), $assigned);
+                }
+            }
+        }
+        $tokens = token_get_all($src);
+        $offsets = $this->tokenOffsets($tokens);
+        $ignore = ['$GLOBALS' => true, '$_GET' => true, '$_POST' => true, '$_REQUEST' => true, '$_SERVER' => true, '$_SESSION' => true, '$_FILES' => true, '$this' => true, '$data' => true];
+        foreach ($tokens as $i => $t) {
+            if (!is_array($t) || $t[0] !== T_VARIABLE) {
+                continue;
+            }
+            $v = $t[1];
+            if (isset($ignore[$v]) || isset($assigned[$v])) {
+                continue;
+            }
+            // Only report the first use per variable.
+            if (strpos(substr($src, 0, $offsets[$i]), $v . '=') !== false || strpos(substr($src, 0, $offsets[$i]), $v . ' =') !== false) {
+                continue;
+            }
+            $line = substr_count(substr($src, 0, $offsets[$i]), "\n") + 1;
+            if (!isset($this->p3seen[$rel . $v])) {
+                $this->p3seen[$rel . $v] = true;
+                $this->add($rel, $line, 'P3', 'WARN', "Variable $v is used but never assigned in this file or its includes");
+            }
+        }
+    }
+
+    /** @var array<string, true> */
+    private array $p3seen = [];
 
     private function checkChartsFiles(): void
     {

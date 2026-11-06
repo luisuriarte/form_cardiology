@@ -71,7 +71,7 @@ $study['batch_date_formatted'] = \OpenEMR\Forms\Cardiology\CardPrintReport::form
 
 // ---- Heart Failure Follow-up-specific fields ----
 $followupDate = $study['study_date'] ?? '';
-$eftScore     = $study['lvef_pct'] ?? null;
+$nyhaClass    = $study['nyha_class'] ?? null;
 $ntproBNP     = $study['nt_probnp_pg_ml'] ?? null;
 $medication   = $study['medications_note'] ?? '';
 $ejectionFraction = $study['lvef_pct'] ?? null;
@@ -268,19 +268,19 @@ ob_start();
             <td class="val"><?= htmlspecialchars($study['patient_sex'] ?? '') ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Follow-up Date') ?>:</td>
+            <td class="label"><?= xlt('Study Date & Time') ?>:</td>
             <td class="val"><?= htmlspecialchars($followupDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($followupDate) : '—') ?></td>
-            <td class="label"><?= xlt('EF Score') ?>:</td>
-            <td class="val"><?= $eftScore !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($eftScore)) : '—' ?></td>
+            <td class="label"><?= xlt('NYHA Functional Class') ?>:</td>
+            <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($nyhaClass, 'card_nyha')) ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('NT-proBNP') ?>:</td>
+            <td class="label"><?= xlt('NT-proBNP (pg/mL)') ?>:</td>
             <td class="val"><?= $ntproBNP !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($ntproBNP)) . ' pg/mL' : '—' ?></td>
-            <td class="label"><?= xlt('Ejection Fraction') ?>:</td>
+            <td class="label"><?= xlt('LVEF (%)') ?>:</td>
             <td class="val"><?= $ejectionFraction !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($ejectionFraction)) . ' %' : '—' ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Medication') ?>:</td>
+            <td class="label"><?= xlt('Medications & Doses') ?>:</td>
             <td class="val" colspan="3"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($medication)) ?></td>
         </tr>
         <tr>

@@ -74,7 +74,6 @@ $settingKey   = $study['setting_key'] ?? '';
 $settingValue = $study['setting_value'] ?? '';
 $updatedBy    = $study['updated_by'] ?? '';
 $updatedAt    = $study['updated_at'] ?? '';
-$status       = $study['status'] ?? '';
 
 // ---- Build HTML for Dompdf ----
 ob_start();
@@ -271,10 +270,6 @@ ob_start();
             <td class="val"><?= htmlspecialchars($updatedBy) ?></td>
             <td class="label"><?= xlt('Updated At') ?>:</td>
             <td class="val"><?= htmlspecialchars($updatedAt ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($updatedAt) : '—') ?></td>
-        </tr>
-        <tr>
-            <td class="label"><?= xlt('Status') ?>:</td>
-            <td class="val" colspan="3"><?= htmlspecialchars(ucfirst($status)) ?></td>
         </tr>
     </table>
 

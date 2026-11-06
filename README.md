@@ -614,6 +614,11 @@ That runs, in order:
    INSERT mismatch).
 4. `php tools/check_schema.php` — the schema checker; it writes the report to
    `docs/schema_audit.md` and exits 1 when any ERROR exists.
+5. `php tools/audit_prints.php` — print label audit; writes
+   `docs/print_label_audit.md` and exits 1 on any MISMATCH or DUPLICATE label.
+
+Additional modes: `php tools/check_schema.php --inventory` writes
+`docs/field_inventory.md` (one section per card table, for clinical review).
 
 Checker flags: `--only=<prefix>` (e.g. `--only=W`, `--only=S`), `--format=md|text`,
 `--no-live` (skip `docs/live_schema.sql`), `--no-report`, `--out=<file>`,
@@ -662,6 +667,15 @@ What each rule means:
 - **UNRESOLVED / UNPARSED** (WARN level, listed under "Not verified"): statements
   the checker cannot resolve statically (e.g. OpenEMR core tables such as
   `list_options`/`documents`, which are not part of this module's schema files).
+- **P1 (ERROR, print.php)**: every printed study value must go through
+  `CardPrintReport::formatValue()`; direct echoes of `$study[...]`, (int)/(float)
+  casts of clinical values and `?: 0` / `?? 0` defaults are flagged (a missing
+  value must print as an em dash).
+- **P2 (ERROR, all PHP)**: bare undefined constants (e.g. a missing `$` as in
+  `leadII`) detected with `token_get_all`; PHP built-in constants, repo-defined
+  constants and static class contexts are whitelisted.
+- **P3 (WARN, print/view)**: variables used but never assigned in the file or in
+  a file it includes.
 
 After the report body, on their own page(s): **Evolution** charts
 (`CardPrintReport::chartsHtml()`) reuse the `CardCharts` series and draw

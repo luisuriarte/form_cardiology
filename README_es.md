@@ -667,9 +667,15 @@ That runs, in order:
    INSERT mismatch).
 4. `php tools/check_schema.php` — the schema checker; it writes the report to
    `docs/schema_audit.md` and exits 1 when any ERROR exists.
+5. `php tools/audit_prints.php` — print label audit; writes
+   `docs/print_label_audit.md` and exits 1 on any MISMATCH or DUPLICATE label.
 
 Checker flags: `--only=<prefix>` (e.g. `--only=W`, `--only=S`), `--format=md|text`,
-`--no-live` (skip `docs/live_schema.sql`), `--no-report`, `--out=<file>`.
+`--no-live` (skip `docs/live_schema.sql`), `--no-report`, `--out=<file>`,
+`--verbose` (show INFO naming notes, W6), `--inventory` (also write
+`docs/field_inventory.md`, one section per card table for clinical review).
+
+Optional pre-commit hook (not installed automatically):
 
 What each rule means:
 
@@ -702,6 +708,15 @@ What each rule means:
   de la misma tabla (posible intercambio, ej. `sbp_day` recibiendo
   `$sbpNight`) es ERROR; la nota simple de naming camelCase es INFO
   (ver `--verbose`).
+- **P1 (ERROR, print.php)**: cada valor impreso desde `$study[...]` debe pasar
+  por `CardPrintReport::formatValue()`; echos directos, casts `(int)`/`(float)`
+  de valores clínicos y defaults `?: 0` / `?? 0` se marcan (un valor ausente
+  debe imprimirse como raya).
+- **P2 (ERROR, todo el PHP)**: constantes indefinidas con `token_get_all`
+  (ej. un `leadII` sin `$`); se listan las constantes built-in de PHP, las
+  definidas en el repo y los contextos de clase estática.
+- **P3 (WARN, print/view)**: variables usadas sin asignación en el archivo ni
+  en sus includes.
 - **UNRESOLVED / UNPARSED** (nivel WARN, en "Not verified"): sentencias que el
   checker no puede resolver estáticamente (ej. tablas core de OpenEMR como
   `list_options`/`documents`, que no forman parte de los archivos de esquema

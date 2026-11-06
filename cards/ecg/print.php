@@ -267,17 +267,17 @@ ob_start();
             <td class="val"><?= htmlspecialchars($study['patient_sex'] ?? '') ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('ECG Date') ?>:</td>
+            <td class="label"><?= xlt('Study Date & Time') ?>:</td>
             <td class="val"><?= htmlspecialchars($ecgDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($ecgDate) : '—') ?></td>
             <td class="label"><?= xlt('Rhythm') ?>:</td>
             <td class="val"><?= htmlspecialchars($rhythm) ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('QRS Complex') ?>:</td>
+            <td class="label"><?= xlt('QRS Duration (ms)') ?>:</td>
             <td class="val" colspan="3"><?= $qRSComplex !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($qRSComplex)) . ' ms' : '—' ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('QT Interval') ?>:</td>
+            <td class="label"><?= xlt('QT Interval (ms)') ?>:</td>
             <td class="val"><?= $qTInterval !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($qTInterval)) . ' ms' : '—' ?></td>
             <td class="label"><?= xlt('Status') ?>:</td>
             <td class="val" colspan="2"><?= htmlspecialchars(ucfirst($status)) ?></td>

@@ -93,7 +93,7 @@ function cardStubs(): array
 
 function withStubs(array $files): array
 {
-    return array_merge($files, cardStubs());
+    return array_merge(cardStubs(), $files);
 }
 
 // ---------------------------------------------------------------------------
@@ -462,6 +462,43 @@ PHP,
     'cards/swap/view.php' => '<?php // stub',
     'cards/swap/print.php' => '<?php // stub',
 ])), 'W6S', true);
+
+// P1: direct echo of a study value in a print.php.
+expectRule('P1: direct study echo caught', makeRoot('p1', withStubs([
+    'table.sql' => $baseTable,
+    'cards/test/save.php' => '<?php // stub',
+    'cards/test/print.php' => <<<'PHP'
+<?php
+$study = ['val' => 42];
+?>
+<td><?= htmlspecialchars($study['val']) ?></td>
+PHP,
+])), 'P1', true);
+
+// P2: bare constant MUST be flagged; PHP_EOL/E_ALL MUST NOT.
+expectRule('P2: bare constant caught', makeRoot('p2', [
+    'cards/test/view.php' => <<<'PHP'
+<?php
+echo leadII;
+PHP,
+    'cards/test/print.php' => '<?php // stub',
+    'cards/test/new.php' => '<?php // stub',
+    'cards/test/save.php' => '<?php // stub',
+]), 'P2', true);
+expectRule('P2: built-in constants stay silent', makeRoot('p2ok', [
+    'cards/test/view.php' => <<<'PHP'
+<?php
+$a = PHP_EOL . (string)E_ALL;
+PHP,
+]), 'P2', false);
+
+// P3: variable used but never assigned.
+expectWarn('P3: undefined variable caught', makeRoot('p3', [
+    'cards/test/view.php' => <<<'PHP'
+<?php
+echo $neverDefinedVar;
+PHP,
+]), 'P3');
 
 // C1: column used on a core table missing from a core schema.
 expectRule('C1: unknown core column caught', makeRoot('c1', [

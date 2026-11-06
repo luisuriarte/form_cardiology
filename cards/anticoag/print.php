@@ -269,23 +269,23 @@ ob_start();
             <td class="val"><?= htmlspecialchars($study['patient_sex'] ?? '') ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Test Date') ?>:</td>
+            <td class="label"><?= xlt('Study Date & Time') ?>:</td>
             <td class="val"><?= htmlspecialchars($testDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($testDate) : '—') ?></td>
             <td class="label"><?= xlt('Test Time') ?>:</td>
             <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($testTime)) ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('INR') ?>:</td>
+            <td class="label"><?= xlt('INR Value') ?>:</td>
             <td class="val"><?= $internationalNormalizedRatio !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($internationalNormalizedRatio)) : '—' ?></td>
-            <td class="label"><?= xlt('Sample Type') ?>:</td>
+            <td class="label"><?= xlt('INR Sample Type') ?>:</td>
             <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['sample_type'] ?? null)) ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Medication') ?>:</td>
+            <td class="label"><?= xlt('Anticoagulant Drug') ?>:</td>
             <td class="val" colspan="3"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($medication)) ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Dosage') ?>:</td>
+            <td class="label"><?= xlt('Current Weekly Dose (mg)') ?>:</td>
             <td class="val" colspan="3"><?= $dosage !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($dosage)) . ' mg/week' : '—' ?></td>
         </tr>
         <tr>

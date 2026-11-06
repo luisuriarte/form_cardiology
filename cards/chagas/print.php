@@ -304,29 +304,34 @@ ob_start();
     </table>
 
     <!-- Chagas Report Content -->
-    <div class="section-title"><?= xlt('Clinical Phase') ?></div>
+    <div class="section-title"><?= xlt('Disease Phase / Clinical Form') ?></div>
     <div class="phase-box">
         <?= chagasVal($phase) ?>
     </div>
 
-    <div class="section-title"><?= xlt('Stage') ?></div>
+    <div class="section-title"><?= xlt('Kuschnir Stage') ?></div>
     <div class="stage-box">
         <?= chagasVal($stage) ?>
     </div>
 
-    <div class="section-title"><?= xlt('Findings') ?></div>
+    <div class="section-title"><?= xlt('ABCD Stage') ?></div>
+    <div class="stage-box">
+        <?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['abcd_stage'] ?? null, 'card_chagas_abcd')) ?>
+    </div>
+
+    <div class="section-title"><?= xlt('ECG Findings') ?></div>
     <div class="report-text">
         <?= $findings !== '' ? nl2br(htmlspecialchars($findings)) : '—' ?>
     </div>
 
     <?php if ($tx): ?>
-        <div class="section-title"><?= xlt('Treatment') ?></div>
+        <div class="section-title"><?= xlt('Treatment Details') ?></div>
         <div class="report-text">
             <?= nl2br(htmlspecialchars($tx)) ?>
         </div>
     <?php endif; ?>
 
-    <div class="section-title"><?= xlt('Last Follow-up') ?></div>
+    <div class="section-title"><?= xlt('Next Control Date') ?></div>
     <div class="report-text">
         <?= htmlspecialchars($lastFollowup ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($lastFollowup) : xlt('Not recorded')) ?>
     </div>

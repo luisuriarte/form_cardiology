@@ -271,31 +271,27 @@ ob_start();
             <td class="val"><?= htmlspecialchars($study['patient_sex'] ?? '') ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Test Date') ?>:</td>
+            <td class="label"><?= xlt('Study Date') ?>:</td>
             <td class="val"><?= htmlspecialchars($testDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($testDate) : '—') ?></td>
-            <td class="label"><?= xlt('Test Time') ?>:</td>
-            <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($testTime)) ?></td>
-        </tr>
-        <tr>
             <td class="label"><?= xlt('Protocol') ?>:</td>
             <td class="val" colspan="3"><?= htmlspecialchars($protocol) ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Duration') ?>:</td>
+            <td class="label"><?= xlt('Exercise Duration (s)') ?>:</td>
             <td class="val"><?= $duration !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($duration)) . ' min' : '—' ?></td>
-            <td class="label"><?= xlt('Peak Heart Rate') ?>:</td>
+            <td class="label"><?= xlt('Peak HR (bpm)') ?>:</td>
             <td class="val"><?= $peakHeartRate !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($peakHeartRate)) . ' lpm' : '—' ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Symptoms') ?>:</td>
+            <td class="label"><?= xlt('Main Symptom') ?>:</td>
             <td class="val" colspan="3"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($symptoms)) ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('ECG Changes') ?>:</td>
+            <td class="label"><?= xlt('ST Depression (mm)') ?>:</td>
             <td class="val" colspan="3"><?= $ecgChanges !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($ecgChanges)) . ' mm' : '—' ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Max Exercise Level') ?>:</td>
+            <td class="label"><?= xlt('METs Achieved') ?>:</td>
             <td class="val"><?= $maxExercise !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($maxExercise)) . ' METs' : '—' ?></td>
             <td class="label"><?= xlt('Status') ?>:</td>
             <td class="val" colspan="2"><?= htmlspecialchars(ucfirst($status)) ?></td>

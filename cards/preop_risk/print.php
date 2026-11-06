@@ -268,13 +268,13 @@ ob_start();
             <td class="val"><?= htmlspecialchars($study['patient_sex'] ?? '') ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Assessment Date') ?>:</td>
+            <td class="label"><?= xlt('Evaluation Date & Time') ?>:</td>
             <td class="val"><?= htmlspecialchars($assessmentDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($assessmentDate) : '—') ?></td>
-            <td class="label"><?= xlt('ASA Class') ?>:</td>
+            <td class="label"><?= xlt('ASA Physical Status') ?>:</td>
             <td class="val"><?= htmlspecialchars($asaClass) ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Procedure') ?>:</td>
+            <td class="label"><?= xlt('Planned Surgery / Procedure') ?>:</td>
             <td class="val" colspan="3"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($procedure)) ?></td>
         </tr>
         <tr>

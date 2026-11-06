@@ -63,4 +63,13 @@ else
   fail=1
 fi
 
+# 5. Print label audit (writes docs/print_label_audit.md; fails on
+# MISMATCH or DUPLICATE labels outside the generic sections)
+if php tools/audit_prints.php > /tmp/cardiology_audit.out 2>&1; then
+  echo "audit_prints: OK, no MISMATCH/DUPLICATE labels (docs/print_label_audit.md)"
+else
+  echo "audit_prints: MISMATCH/DUPLICATE labels found (docs/print_label_audit.md)"
+  fail=1
+fi
+
 exit "$fail"

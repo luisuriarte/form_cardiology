@@ -266,13 +266,13 @@ ob_start();
             <td class="val"><?= htmlspecialchars($study['patient_sex'] ?? '') ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Assessment Date') ?>:</td>
+            <td class="label"><?= xlt('Evaluation Date & Time') ?>:</td>
             <td class="val"><?= htmlspecialchars($assessmentDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($assessmentDate) : '—') ?></td>
-            <td class="label"><?= xlt('Resting Heart Rate') ?>:</td>
+            <td class="label"><?= xlt('Heart Rate (bpm)') ?>:</td>
             <td class="val"><?= $restingHeartRate !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($restingHeartRate)) . ' lpm' : '—' ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Body Mass Index') ?>:</td>
+            <td class="label"><?= xlt('BMI (kg/m²)') ?>:</td>
             <td class="val"><?= $bodyMassIndex !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($bodyMassIndex)) : '—' ?></td>
             <td class="label"><?= xlt('Status') ?>:</td>
             <td class="val" colspan="2"><?= htmlspecialchars(ucfirst($status)) ?></td>
