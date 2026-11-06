@@ -1321,7 +1321,6 @@ INSERT INTO tmp_card_lang (constant_name, definition) VALUES
 ('Sample Type', 'Tipo de muestra'),
 ('Signature', 'Firma'),
 ('INR target range', 'Rango objetivo de INR'),
-('Dose Change (%)', 'Cambio de dosis (%)'),
 ('DRAFT - not a final report', 'BORRADOR - no es un informe final');
 
 -- A. Add the source constants that do not exist yet
