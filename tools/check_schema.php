@@ -1384,7 +1384,16 @@ final class SchemaChecker
     private function checkDemoData(string $rel, string $sql): void
     {
         $stripped = self::stripComments($sql);
-        foreach (self::splitStatements($stripped) as $st) {
+        // Demo inserts may be wrapped in PREPARE string literals; also extract
+        // quoted strings containing INSERT so those are checked too.
+        $innerInserts = [];
+        foreach (self::quotedStrings($stripped) as $q) {
+            if (stripos($q, 'INSERT INTO') !== false) {
+                $innerInserts[] = ['sql' => $q, 'line' => 1];
+            }
+        }
+        $statements = array_merge(self::splitStatements($stripped), $innerInserts);
+        foreach ($statements as $st) {
             $stmt = trim($st['sql']);
             $line = $st['line'];
             if (!preg_match('/^INSERT\s+(?:IGNORE\s+)?INTO\s+`([^`]+)`\s*\(([^)]*)\)/is', $stmt, $m)) {
