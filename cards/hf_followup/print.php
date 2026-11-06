@@ -70,11 +70,11 @@ $study['batch_date_formatted'] = \OpenEMR\Forms\Cardiology\CardPrintReport::form
 
 
 // ---- Heart Failure Follow-up-specific fields ----
-$followupDate = $study['followup_date'] ?? '';
-$eftScore     = (int)($study['eft_score'] ?? 0);
-$ntproBNP     = (float)($study['ntpro_bnp'] ?? 0);
-$medication   = $study['medication'] ?? '';
-$ejectionFraction = (float)($study['ejection_fraction'] ?? 0);
+$followupDate = $study['study_date'] ?? '';
+$eftScore     = $study['lvef_pct'] ?? null;
+$ntproBNP     = $study['nt_probnp_pg_ml'] ?? null;
+$medication   = $study['medications_note'] ?? '';
+$ejectionFraction = $study['lvef_pct'] ?? null;
 $status        = $study['status'] ?? '';
 
 // ---- Build HTML for Dompdf ----
@@ -269,19 +269,19 @@ ob_start();
         </tr>
         <tr>
             <td class="label"><?= xlt('Follow-up Date') ?>:</td>
-            <td class="val"><?= htmlspecialchars($followupDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($followupDate) : '--/--/----') ?></td>
+            <td class="val"><?= htmlspecialchars($followupDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($followupDate) : '—') ?></td>
             <td class="label"><?= xlt('EF Score') ?>:</td>
-            <td class="val"><?= htmlspecialchars($eftScore) ?></td>
+            <td class="val"><?= $eftScore !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($eftScore)) : '—' ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('NT-proBNP') ?>:</td>
-            <td class="val"><?= number_format($ntproBNP, 1) ?> pg/mL</td>
+            <td class="val"><?= $ntproBNP !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($ntproBNP)) . ' pg/mL' : '—' ?></td>
             <td class="label"><?= xlt('Ejection Fraction') ?>:</td>
-            <td class="val"><?= number_format($ejectionFraction, 1) ?> %</td>
+            <td class="val"><?= $ejectionFraction !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($ejectionFraction)) . ' %' : '—' ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('Medication') ?>:</td>
-            <td class="val" colspan="3"><?= htmlspecialchars($medication) ?></td>
+            <td class="val" colspan="3"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($medication)) ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('Status') ?>:</td>

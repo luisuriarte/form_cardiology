@@ -416,5 +416,105 @@ expectRule('original bug 62/63/61 caught', makeRoot('bug', withStubs([
     'cards/bug/save.php' => $bugSave,
 ])), 'W2', true);
 
+// W6S: swapped variables in a $data array.
+$swapTable = <<<'SQL'
+CREATE TABLE IF NOT EXISTS `form_card_swap` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Primary key',
+  `pid` BIGINT NOT NULL COMMENT 'Patient id',
+  `encounter` BIGINT NOT NULL COMMENT 'Encounter number',
+  `cardiology_id` BIGINT NOT NULL COMMENT 'Parent container',
+  `user` VARCHAR(255) DEFAULT NULL COMMENT 'Username',
+  `activity` TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Soft delete flag',
+  `status` VARCHAR(10) NOT NULL DEFAULT 'draft' COMMENT 'Workflow status',
+  `study_date` DATETIME NOT NULL COMMENT 'Study date and time',
+  `sbp_day` SMALLINT DEFAULT NULL COMMENT 'Daytime systolic',
+  `sbp_night` SMALLINT DEFAULT NULL COMMENT 'Nighttime systolic',
+  `bsa_m2` DECIMAL(4,2) DEFAULT NULL COMMENT 'Body surface area, calculated server-side',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Swap test card';
+INSERT IGNORE INTO `card_modules` (`code`, `title`, `icon`, `table_name`, `sort_order`) VALUES
+  ('swap', 'Swap', 'fa-x', 'form_card_swap', 10);
+SQL;
+expectRule('W6S: swapped variables caught', makeRoot('w6s', withStubs([
+    'table.sql' => $swapTable,
+    'cards/swap/save.php' => <<<'PHP'
+<?php
+declare(strict_types=1);
+require_once(__DIR__ . '/../../lib/CardInput.php');
+$sbpDay = 120;
+$sbpNight = 100;
+$bsa = 1.8;
+$data = [
+    'pid' => 1,
+    'encounter' => 1,
+    'cardiology_id' => 1,
+    'user' => 'admin',
+    'study_date' => '2025-01-01 10:00:00',
+    'sbp_day' => $sbpNight,
+    'sbp_night' => $sbpDay,
+    'bsa_m2' => $bsa,
+];
+$columns = array_keys($data);
+$sql = 'INSERT INTO `form_card_swap` (`' . implode('`, `', $columns) . '`) VALUES (' . implode(', ', array_fill(0, count($columns), '?')) . ')';
+sqlInsert($sql, array_values($data));
+PHP,
+    'cards/swap/new.php' => '<?php // stub',
+    'cards/swap/view.php' => '<?php // stub',
+    'cards/swap/print.php' => '<?php // stub',
+])), 'W6S', true);
+
+// C1: column used on a core table missing from a core schema.
+expectRule('C1: unknown core column caught', makeRoot('c1', [
+    'docs/core_schema/v1.sql' => <<<'SQL'
+CREATE TABLE `list_options` (
+  `list_id` VARCHAR(32) NOT NULL COMMENT 'List id',
+  `option_id` VARCHAR(64) NOT NULL COMMENT 'Option id',
+  PRIMARY KEY (`list_id`, `option_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Core list options';
+SQL,
+    'cards/test/save.php' => <<<'PHP'
+<?php
+sqlQuery('SELECT list_id, option_id, bogus_col FROM `list_options` WHERE list_id = ?', ['lists']);
+PHP,
+]), 'C1', true);
+
+// C2: INSERT into a core table omitting a NOT NULL column without default.
+expectRule('C2: core NOT NULL omission caught', makeRoot('c2', [
+    'docs/core_schema/v1.sql' => <<<'SQL'
+CREATE TABLE `users` (
+  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT 'Id',
+  `username` VARCHAR(64) NOT NULL COMMENT 'Username',
+  `password` VARCHAR(128) NOT NULL COMMENT 'Password hash',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Core users';
+SQL,
+    'cards/test/save.php' => <<<'PHP'
+<?php
+sqlInsert('INSERT INTO `users` (`username`) VALUES (?)', ['admin']);
+PHP,
+]), 'C2', true);
+
+// C3: column present in only one of two core versions. The same case is also
+// a C1 ERROR (used but missing in v2), so exit is 1 with C3 present.
+expectRule('C3: version-only core column caught', makeRoot('c3', [
+    'docs/core_schema/v1.sql' => <<<'SQL'
+CREATE TABLE `patient_data` (
+  `pid` BIGINT NOT NULL COMMENT 'Pid',
+  `newer_col` VARCHAR(32) DEFAULT NULL COMMENT 'Newer',
+  PRIMARY KEY (`pid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Core patients';
+SQL,
+    'docs/core_schema/v2.sql' => <<<'SQL'
+CREATE TABLE `patient_data` (
+  `pid` BIGINT NOT NULL COMMENT 'Pid',
+  PRIMARY KEY (`pid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Core patients';
+SQL,
+    'cards/test/save.php' => <<<'PHP'
+<?php
+sqlQuery('SELECT pid, newer_col FROM `patient_data` WHERE pid = ?', [1]);
+PHP,
+]), 'C3', true);
+
 echo "\n$PASS passed, $FAIL failed\n";
 exit($FAIL > 0 ? 1 : 0);

@@ -36,12 +36,17 @@ final class SchemaChecker
     /** @var array<string, array{tables: array<string, array>, seeds: array<int, array>}> */
     public array $schema = []; // 'table.sql' | 'upgrades' | 'live'
 
+    /** @var array<string, array<string, array>> core schemas: version label => tables */
+    public array $coreSchemas = [];
+
     public string $root;
 
     /** @var array<string, true> */
     private array $only = [];
 
     public bool $noLive = false;
+    public bool $verbose = false;
+    public bool $inventory = false;
 
     public function __construct(string $root, array $only = [], bool $noLive = false)
     {
@@ -54,6 +59,9 @@ final class SchemaChecker
 
     private function add(string $file, int $line, string $rule, string $severity, string $message): void
     {
+        if ($severity === 'INFO' && !$this->verbose) {
+            return;
+        }
         if (!empty($this->only)) {
             $keep = false;
             foreach ($this->only as $prefix => $_) {
@@ -77,6 +85,7 @@ final class SchemaChecker
         $this->loadSchema('table.sql', $this->root . '/table.sql');
         $upgradeFiles = $this->upgradeFiles();
         $this->loadSchema('upgrades', null, $upgradeFiles);
+        $this->loadCoreSchemas();
         if (!$this->noLive) {
             $live = $this->root . '/docs/live_schema.sql';
             if (is_file($live)) {
@@ -88,6 +97,8 @@ final class SchemaChecker
         $this->checkLiveVsFiles();
         $this->checkWriters();
         $this->checkReaders();
+        $this->checkCoreTables();
+        $this->writeCoreTablesUsed();
 
         return $this->hasErrors() ? 1 : 0;
     }
@@ -108,6 +119,178 @@ final class SchemaChecker
         $files = glob($this->root . '/sql/upgrade_*.sql') ?: [];
         sort($files, SORT_NATURAL);
         return $files;
+    }
+
+    /** Load every docs/core_schema/*.sql as one version each (label = filename). */
+    private function loadCoreSchemas(): void
+    {
+        $dir = $this->root . '/docs/core_schema';
+        if (!is_dir($dir)) {
+            return;
+        }
+        $files = glob($dir . '/*.sql') ?: [];
+        sort($files, SORT_NATURAL);
+        foreach ($files as $path) {
+            $parsed = self::parseSqlFile($path);
+            $tables = [];
+            foreach ($parsed['tables'] as $t) {
+                $tables[$t['name']] = $t;
+            }
+            $this->coreSchemas[basename($path)] = $tables;
+        }
+    }
+
+    /** Module tables (from table.sql). */
+    private function moduleTables(): array
+    {
+        return array_keys($this->schema['table.sql']['tables'] ?? []);
+    }
+
+    /**
+     * Collect core-table usage from all PHP files:
+     * table => ['columns' => [col => true], 'inserts' => list of [cols, file, line]]
+     */
+    private function coreUsage(): array
+    {
+        $module = $this->moduleTables();
+        $usage = [];
+        foreach ($this->phpFiles() as $abs) {
+            $src = file_get_contents($abs);
+            if ($src === false) {
+                continue;
+            }
+            $rel = $this->rel($abs);
+            if (!preg_match_all('/(sqlInsert|sqlStatement|sqlQuery)\s*\(\s*\'((?:[^\'\\\\]|\\\\.)*)\'/s', $src, $m, PREG_OFFSET_CAPTURE)) {
+                continue;
+            }
+            foreach ($m[0] as $idx => $full) {
+                $sql = stripcslashes($m[2][$idx][0]);
+                $offset = $full[1];
+                $line = substr_count(substr($src, 0, $offset), "\n") + 1;
+                if (!preg_match('/\b(INSERT\s+INTO|UPDATE|SELECT[^\']*?\bFROM|DELETE\s+FROM)\s+`([^`]+)`/i', $sql, $tm)) {
+                    continue;
+                }
+                $table = $tm[2];
+                if (in_array($table, $module, true)) {
+                    continue;
+                }
+                if (!isset($usage[$table])) {
+                    $usage[$table] = ['columns' => [], 'inserts' => []];
+                }
+                $cols = [];
+                if (preg_match('/INSERT\s+INTO\s+`[^`]+`\s*\(([^)]*)\)/i', $sql, $cm)) {
+                    foreach (explode(',', $cm[1]) as $c) {
+                        $cols[] = trim(trim($c, " \t`"), " \t\r\n");
+                    }
+                    $usage[$table]['inserts'][] = ['cols' => $cols, 'file' => $rel, 'line' => $line];
+                }
+                if (preg_match_all('/`([a-z_0-9]+)`\s*=/i', $sql, $sm)) {
+                    $cols = array_merge($cols, $sm[1]);
+                }
+                if (preg_match('/SELECT\s+(.+?)\s+FROM\s+`' . preg_quote($table, '/') . '`/is', $sql, $cm)) {
+                    $list = trim($cm[1]);
+                    if ($list !== '*') {
+                        foreach (self::splitTopLevel($list) as $item) {
+                            $item = trim($item);
+                            if (preg_match('/^`([a-z_0-9]+)`/i', $item, $im)) {
+                                $cols[] = $im[1];
+                            } elseif (preg_match('/^([a-z_0-9]+)(?:\s|$)/i', $item, $im)) {
+                                $cols[] = $im[1];
+                            }
+                        }
+                    }
+                }
+                foreach ($cols as $c) {
+                    $usage[$table]['columns'][$c] = true;
+                }
+            }
+        }
+        return $usage;
+    }
+
+    private function checkCoreTables(): void
+    {
+        if (empty($this->coreSchemas)) {
+            $this->coreUsageCache = [];
+            return;
+        }
+        $usage = $this->coreUsage();
+        $this->coreUsageCache = $usage;
+        foreach ($usage as $table => $u) {
+            $presentInAny = false;
+            foreach ($this->coreSchemas as $version => $tables) {
+                if (isset($tables[$table])) {
+                    $presentInAny = true;
+                    break;
+                }
+            }
+            if (!$presentInAny) {
+                $this->add('docs/core_schema', 1, 'C4', 'INFO', "Core table `$table` is referenced by the code but is not present in any provided core schema");
+                continue;
+            }
+            foreach ($this->coreSchemas as $version => $tables) {
+                if (!isset($tables[$table])) {
+                    $this->add('docs/core_schema', 1, 'C1', 'ERROR', "Core table `$table` is missing from schema $version");
+                    continue;
+                }
+                $cols = $tables[$table]['columns'] ?? [];
+                foreach (array_keys($u['columns']) as $col) {
+                    if (!isset($cols[$col])) {
+                        $this->add('docs/core_schema', 1, 'C1', 'ERROR', "Core table `$table` column `$col` used by the code does not exist in schema $version");
+                    }
+                }
+                foreach ($u['inserts'] as $ins) {
+                    foreach ($cols as $cname => $c) {
+                        if ($c['not_null'] && $c['default'] === null && !$c['auto_increment'] && !in_array($cname, $ins['cols'], true)) {
+                            $this->add($ins['file'], $ins['line'], 'C2', 'ERROR', "INSERT into core table `$table` omits NOT NULL column `$cname` without DEFAULT (schema $version)");
+                        }
+                    }
+                }
+            }
+            // C3: used column present in only some versions.
+            $versions = array_keys($this->coreSchemas);
+            foreach (array_keys($u['columns']) as $col) {
+                $have = [];
+                foreach ($versions as $v) {
+                    if (isset($this->coreSchemas[$v][$table]['columns'][$col])) {
+                        $have[] = $v;
+                    }
+                }
+                if (!empty($have) && count($have) < count($versions)) {
+                    $this->add('docs/core_schema', 1, 'C3', 'WARN', "Core table `$table` column `$col` exists only in: " . implode(', ', $have));
+                }
+            }
+        }
+    }
+
+    /** @var array */
+    private array $coreUsageCache = [];
+
+    private function writeCoreTablesUsed(): void
+    {
+        if (empty($this->coreSchemas)) {
+            return;
+        }
+        $usage = $this->coreUsageCache ?: $this->coreUsage();
+        $out = "# Core tables used by form_cardiology\n\n";
+        $out .= "Generated by tools/check_schema.php from docs/core_schema/*.sql and PHP usage.\n\n";
+        foreach ($usage as $table => $u) {
+            $out .= "## $table\n\n";
+            $cols = array_keys($u['columns']);
+            sort($cols);
+            foreach ($cols as $col) {
+                $have = [];
+                foreach (array_keys($this->coreSchemas) as $v) {
+                    if (isset($this->coreSchemas[$v][$table]['columns'][$col])) {
+                        $have[] = $v;
+                    }
+                }
+                $out .= "- $col (versions with it: " . ($have ? implode(', ', $have) : 'none') . ")\n";
+            }
+            $out .= "\n";
+        }
+        $path = $this->root . '/docs/core_tables_used.txt';
+        file_put_contents($path, $out);
     }
 
     // ------------------------------------------------------------------
@@ -159,6 +342,98 @@ final class SchemaChecker
             }
         }
         $this->schema[$name] = ['tables' => $tables, 'seeds' => $seeds];
+    }
+
+    /**
+     * Field inventory for clinical review (docs/field_inventory.md).
+     * One section per card table; no clinical interpretation.
+     */
+    public function writeInventory(): void
+    {
+        $out = "# Cardiology field inventory\n\n";
+        $out .= "Generated by `php tools/check_schema.php --inventory`. For clinical review: every column of every card table, "
+            . "its type, whether it is calculated, required to finalize, the list options it offers, its range, and the HTML input that fills it.\n\n";
+
+        // RANGES per card.
+        $rangesByCard = [];
+        foreach (glob($this->root . '/cards/*/save.php') ?: [] as $abs) {
+            $card = basename(dirname($abs));
+            $rangesByCard[$card] = $this->parseRanges(file_get_contents($abs));
+        }
+        // Finalize-required columns per card (from save_final blocks).
+        $finalizeByCard = [];
+        foreach (glob($this->root . '/cards/*/save.php') ?: [] as $abs) {
+            $card = basename(dirname($abs));
+            $finalizeByCard[$card] = $this->finalizeColumns(file_get_contents($abs));
+        }
+        // Seed option titles per list.
+        $optionsByList = [];
+        foreach (($this->schema['table.sql']['seeds'] ?? []) as $s) {
+            if (($s['table'] ?? '') !== 'list_options') {
+                continue;
+            }
+            $cols = $s['columns'] ?? [];
+            $li = array_search('list_id', $cols, true);
+            $oi = array_search('option_id', $cols, true);
+            $ti = array_search('title', $cols, true);
+            foreach (($s['rows'] ?? []) as $r) {
+                $p = explode('|', $r);
+                if ($li !== false && $oi !== false) {
+                    $optionsByList[$p[$li]][$p[$oi]] = $p[$ti] ?? '';
+                }
+            }
+        }
+
+        foreach ($this->schema['table.sql']['tables'] ?? [] as $table => $t) {
+            if (!str_starts_with($table, 'form_card_')) {
+                continue;
+            }
+            $card = substr($table, strlen('form_card_'));
+            $out .= "## $table\n\n";
+            $out .= "Table `$table`, " . count($t['columns']) . " columns.\n\n";
+            $out .= "| Column | Type | Nullable | Comment | List | Range | Calculated | Required to finalize | Input |\n";
+            $out .= "|---|---|---|---|---|---|---|---|---|\n";
+            $inputs = $this->inputNames($card, $table);
+            foreach ($t['columns'] as $cname => $c) {
+                $listId = null;
+                if (preg_match('/list_id\s+([a-z_0-9]+)/i', $c['comment'] ?? '', $lm)) {
+                    $listId = $lm[1];
+                }
+                $range = $rangesByCard[$card][$cname] ?? null;
+                $rangeStr = $range !== null ? (string)$range[0] . '–' . (string)$range[1] : '';
+                $calc = str_contains(strtolower($c['comment'] ?? ''), 'calculated') ? 'yes' : 'no';
+                $req = in_array($cname, $finalizeByCard[$card] ?? [], true) ? 'yes' : 'no';
+                $input = isset($inputs[$cname]) ? $cname : 'no input';
+                $out .= "| $cname | {$c['type']} | " . ($c['nullable'] ? 'yes' : 'no') . " | {$c['comment']} | "
+                    . ($listId ?? '') . " | $rangeStr | $calc | $req | $input |\n";
+                if ($listId !== null && isset($optionsByList[$listId])) {
+                    $opts = [];
+                    foreach ($optionsByList[$listId] as $oid => $title) {
+                        $opts[] = "$oid ($title)";
+                    }
+                    $out .= "|  | options of list `$listId`: " . implode('; ', $opts) . " |  |  |  |  |  |  |  |\n";
+                }
+            }
+            $out .= "\n";
+        }
+        file_put_contents($this->root . '/docs/field_inventory.md', $out);
+    }
+
+    /** @return string[] column names read inside save_final gates */
+    private function finalizeColumns(string $src): array
+    {
+        $cols = [];
+        if (!preg_match_all('/if\s*\(\s*(?:\$status\s*===\s*\'final\'|\$action\s*===\s*\'save_final\')[^\{]*\{(.*?)\n\s*\}/s', $src, $m)) {
+            return $cols;
+        }
+        foreach ($m[1] as $block) {
+            if (preg_match_all('/\$p\s*\[\s*\'([a-z_0-9]+)\'\s*\]/', $block, $pm)) {
+                foreach (array_unique($pm[1]) as $f) {
+                    $cols[] = $f;
+                }
+            }
+        }
+        return $cols;
     }
 
     /**
@@ -1290,11 +1565,32 @@ final class SchemaChecker
             && !preg_match('/list\s*\([^)]*\$' . preg_quote($name, '/') . '\b/', $before)) {
             $this->add($rel, $line, 'W6', 'ERROR', "Variable \$$name used for column '{$entry['key']}' is never assigned earlier in this file");
         }
-        // Naming: camelCase(column).
+        // Naming: camelCase(column) is INFO only (hidden unless --verbose),
+        // with known aliases ignored. A name that matches a DIFFERENT column
+        // is a real swap bug and is reported as W6S ERROR instead.
         $expected = lcfirst(str_replace(' ', '', ucwords(str_replace('_', ' ', $entry['key']))));
-        if ($name !== $expected && !str_starts_with($name, substr($expected, 0, 4)) && $name !== 'data') {
-            // Only warn for close cases to avoid noise: different name entirely.
-            $this->add($rel, $line, 'W6', 'WARN', "Variable \$$name does not follow column name '{$entry['key']}' (expected \$$expected)");
+        $aliases = ['authUser' => 'user', 'studyId' => 'id'];
+        $norm = static fn(string $s): string => strtolower(str_replace('_', '', $s));
+        $varNorm = $norm($name);
+        $this->addSwapFinding($rel, $line, $table, $entry['key'], $name);
+        if ($name !== $expected && !str_starts_with($name, substr($expected, 0, 4)) && $name !== 'data'
+            && !isset($aliases[$name])) {
+            $this->add($rel, $line, 'W6', 'INFO', "Variable \$$name does not follow column name '{$entry['key']}' (expected \$$expected)");
+        }
+    }
+
+    private function addSwapFinding(string $rel, int $line, string $table, string $column, string $varName): void
+    {
+        $norm = static fn(string $s): string => strtolower(str_replace('_', '', $s));
+        $varNorm = $norm($varName);
+        $cols = $this->columnsOf($table);
+        foreach ($cols as $other => $_c) {
+            if ($other === $column) {
+                continue;
+            }
+            if ($varNorm === $norm($other)) {
+                $this->add($rel, $line, 'W6S', 'ERROR', "Column '$column' is assigned variable \$$varName, which matches column '$other' (possible swap)");
+            }
         }
     }
 
@@ -1316,6 +1612,15 @@ final class SchemaChecker
             $cols = $this->columnsOf($table);
             if (empty($cols)) {
                 $cols = $this->schema['upgrades']['tables'][$table]['columns'] ?? $cols;
+            }
+            if (empty($cols) && !empty($this->coreSchemas)) {
+                // Union across core schema versions (existence only; C1 checks per version).
+                foreach ($this->coreSchemas as $tables) {
+                    if (isset($tables[$table])) {
+                        $cols = $tables[$table]['columns'] ?? $cols;
+                        break;
+                    }
+                }
             }
             if (empty($cols)) {
                 $this->add($rel, $line, 'W1', 'UNRESOLVED', "Cannot verify columns of `$table` (not in schema model)");
@@ -1350,8 +1655,24 @@ final class SchemaChecker
                         }
                     }
                     $paramCount = null;
+                    $paramVars = null;
                     if (preg_match('/^\[(.*)\]$/s', $args, $am)) {
                         $paramCount = $this->countArrayElements($am[1]);
+                        $paramVars = [];
+                        foreach (self::splitTopLevel($am[1]) as $el) {
+                            $el = trim($el);
+                            $paramVars[] = $el !== '' && $el[0] === '$' ? substr(explode('?', $el)[0], 1) : null;
+                        }
+                    }
+                    // W6S swap check on positional parameters.
+                    if ($paramVars !== null && count($paramVars) === count($colList)) {
+                        foreach ($colList as $i => $colName) {
+                            $vn = $paramVars[$i] ?? null;
+                            if ($vn === null) {
+                                continue;
+                            }
+                            $this->addSwapFinding($rel, $line, $table, $colName, (string)$vn);
+                        }
                     }
                     if ($slots !== count($colList) || ($paramCount !== null && $placeholders !== $paramCount)) {
                         $this->add($rel, $line, 'W2', 'ERROR', "Table `$table`: INSERT has " . count($colList) . " columns, $slots value slots, $placeholders placeholders, " . var_export($paramCount, true) . ' parameters');
@@ -1799,10 +2120,13 @@ final class SchemaChecker
                     $known = array_merge($known, ['list_id', 'option_id', 'title', 'seq', 'is_default', 'option_value', 'activity']);
                 }
                 if (preg_match_all('/\$(?:study|row|views)\s*\[\s*\'([a-z_0-9]+)\'\s*\]/', $src, $m, PREG_OFFSET_CAPTURE)) {
+                    $strictFiles = ['print.php', 'view.php', 'new.php', '_form_fields.php'];
+                    $severity = in_array(basename($rel), $strictFiles, true) || str_contains($rel, 'templates/')
+                        ? 'ERROR' : 'WARN';
                     foreach ($m[1] as [$key, $off]) {
                         if (!in_array($key, $known, true)) {
                             $line = substr_count(substr($src, 0, $off), "\n") + 1;
-                            $this->add($rel, $line, 'R2', 'WARN', "Key '$key' read from study row is not a column of `" . $this->cardTable($cardCode) . '`');
+                            $this->add($rel, $line, 'R2', $severity, "Key '$key' read from study row is not a column of `" . $this->cardTable($cardCode) . '`');
                         }
                     }
                 }
@@ -1923,7 +2247,7 @@ final class SchemaChecker
     // ------------------------------------------------------------------
     public function report(string $format): string
     {
-        $sevRank = ['ERROR' => 0, 'WARN' => 1, 'UNRESOLVED' => 2, 'UNPARSED' => 3];
+        $sevRank = ['ERROR' => 0, 'WARN' => 1, 'UNRESOLVED' => 2, 'UNPARSED' => 3, 'INFO' => 4];
         $findings = $this->findings;
         usort($findings, static function (SchemaFinding $a, SchemaFinding $b) use ($sevRank) {
             $d = ($sevRank[$a->severity] ?? 9) <=> ($sevRank[$b->severity] ?? 9);
@@ -1969,6 +2293,20 @@ final class SchemaChecker
             }
             $out .= "- {$f->file}:{$f->line}  {$f->rule}  {$f->severity}  {$f->message}\n";
         }
+        $out .= "\n## Core table columns in only some versions (C3)\n\n";
+        $c3 = [];
+        foreach ($findings as $f) {
+            if ($f->rule === 'C3') {
+                $c3[] = $f->message;
+            }
+        }
+        if (empty($c3)) {
+            $out .= "None.\n";
+        } else {
+            foreach ($c3 as $msg) {
+                $out .= "- $msg\n";
+            }
+        }
         $out .= "\n## Not verified\n\n";
         $notVerified = array_filter($findings, static fn($f) => in_array($f->severity, ['UNRESOLVED', 'UNPARSED'], true));
         if (empty($notVerified)) {
@@ -2009,7 +2347,12 @@ function schemaCheckerMain(array $argv): int
         }
     }
     $checker = new SchemaChecker($root, $only, $noLive);
+    $checker->verbose = in_array('--verbose', $argv, true);
+    $checker->inventory = in_array('--inventory', $argv, true);
     $code = $checker->run();
+    if ($checker->inventory) {
+        $checker->writeInventory();
+    }
     $report = $checker->report($format);
     echo $report . PHP_EOL;
     if ($out !== '') {

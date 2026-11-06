@@ -691,9 +691,30 @@ What each rule means:
   comments); upgrade scripts are idempotent; `docs/live_schema.sql` (the real
   database dump) matches the files — the check that shows what the live
   database is missing.
-- **UNRESOLVED / UNPARSED** (WARN level, listed under "Not verified"): statements
-  the checker cannot resolve statically (e.g. OpenEMR core tables such as
-  `list_options`/`documents`, which are not part of this module's schema files).
+- **C1–C4 (tablas core)**: las columnas usadas en tablas core de OpenEMR
+  (`list_options`, `documents`, `categories`, `patient_data`, `users`, …)
+  existen en cada versión de `docs/core_schema/*.sql`; los INSERT en tablas
+  core incluyen las columnas NOT NULL requeridas; las columnas presentes en
+  solo algunas versiones se listan; el reporte en
+  `docs/core_tables_used.txt` lista cada tabla core y columna usada por el
+  código. (Se omite si `docs/core_schema/` no tiene archivos SQL.)
+- **W6S**: una columna asignada con una variable que nombra *otra* columna
+  de la misma tabla (posible intercambio, ej. `sbp_day` recibiendo
+  `$sbpNight`) es ERROR; la nota simple de naming camelCase es INFO
+  (ver `--verbose`).
+- **UNRESOLVED / UNPARSED** (nivel WARN, en "Not verified"): sentencias que el
+  checker no puede resolver estáticamente (ej. tablas core de OpenEMR como
+  `list_options`/`documents`, que no forman parte de los archivos de esquema
+  del módulo).
+
+Hook opcional de pre-commit (no se instala automáticamente):
+
+```bash
+bash tools/install_hook.sh
+```
+
+Instala `.git/hooks/pre-commit` ejecutando `tools/run_checks.sh`.
+Usá `--force` para sobrescribir un hook existente.
 
 ---
 

@@ -70,13 +70,12 @@ $study['batch_date_formatted'] = \OpenEMR\Forms\Cardiology\CardPrintReport::form
 
 
 // ---- Anticoagulation-specific fields ----
-$testDate    = $study['test_date']    ?? '';
-$testTime    = $study['test_time']    ?? '';
-$internationalNormalizedRatio = (float)($study['international_normalized_ratio'] ?? 0);
-$prothrombinTime   = (float)($study['prothrombin_time']   ?? 0);
-$medication       = $study['medication']       ?? '';
-$dosage           = $study['dosage']           ?? '';
-$lastTestDate    = $study['last_test_date']    ?? '';
+$testDate    = $study['study_date']    ?? '';
+$testTime    = !empty($study['study_date']) ? substr((string)$study['study_date'], 11, 5) : '';
+$internationalNormalizedRatio = $study['inr_value'] ?? null;
+$medication       = $study['drug']       ?? '';
+$dosage           = $study['current_weekly_dose_mg'] ?? null;
+$lastTestDate    = $study['next_control_date'] ?? '';
 $status          = $study['status']          ?? '';
 
 // ---- Build HTML for Dompdf ----
@@ -271,27 +270,27 @@ ob_start();
         </tr>
         <tr>
             <td class="label"><?= xlt('Test Date') ?>:</td>
-            <td class="val"><?= htmlspecialchars($testDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($testDate) : '--/--/----') ?></td>
+            <td class="val"><?= htmlspecialchars($testDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($testDate) : '—') ?></td>
             <td class="label"><?= xlt('Test Time') ?>:</td>
-            <td class="val"><?= htmlspecialchars($testTime) ?></td>
+            <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($testTime)) ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('INR') ?>:</td>
-            <td class="val"><?= number_format($internationalNormalizedRatio, 2) ?></td>
-            <td class="label"><?= xlt('Prothrombin Time') ?>:</td>
-            <td class="val"><?= number_format($prothrombinTime, 1) ?> seg</td>
+            <td class="val"><?= $internationalNormalizedRatio !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($internationalNormalizedRatio)) : '—' ?></td>
+            <td class="label"><?= xlt('Sample Type') ?>:</td>
+            <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($study['sample_type'] ?? null)) ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('Medication') ?>:</td>
-            <td class="val" colspan="3"><?= htmlspecialchars($medication) ?></td>
+            <td class="val" colspan="3"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($medication)) ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('Dosage') ?>:</td>
-            <td class="val" colspan="3"><?= htmlspecialchars($dosage) ?></td>
+            <td class="val" colspan="3"><?= $dosage !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($dosage)) . ' mg/week' : '—' ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Last Test Date') ?>:</td>
-            <td class="val"><?= htmlspecialchars($lastTestDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($lastTestDate) : '--/--/----') ?></td>
+            <td class="label"><?= xlt('Next Control Date') ?>:</td>
+            <td class="val"><?= htmlspecialchars($lastTestDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($lastTestDate) : '—') ?></td>
             <td class="label"><?= xlt('Status') ?>:</td>
             <td class="val" colspan="2"><?= htmlspecialchars(ucfirst($status)) ?></td>
         </tr>

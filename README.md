@@ -616,7 +616,18 @@ That runs, in order:
    `docs/schema_audit.md` and exits 1 when any ERROR exists.
 
 Checker flags: `--only=<prefix>` (e.g. `--only=W`, `--only=S`), `--format=md|text`,
-`--no-live` (skip `docs/live_schema.sql`), `--no-report`, `--out=<file>`.
+`--no-live` (skip `docs/live_schema.sql`), `--no-report`, `--out=<file>`,
+`--verbose` (show INFO naming notes, W6), `--inventory` (also write
+`docs/field_inventory.md`, one section per card table for clinical review).
+
+Optional pre-commit hook (not installed automatically):
+
+```bash
+bash tools/install_hook.sh
+```
+
+This installs `.git/hooks/pre-commit` running `tools/run_checks.sh`.
+Use `--force` to overwrite an existing hook.
 
 What each rule means:
 
@@ -638,6 +649,16 @@ What each rule means:
   comments); upgrade scripts are idempotent; `docs/live_schema.sql` (the real
   database dump) matches the files — the check that shows what the live
   database is missing.
+- **C1–C4 (core tables)**: columns used on OpenEMR core tables
+  (`list_options`, `documents`, `categories`, `patient_data`, `users`, …)
+  exist in every `docs/core_schema/*.sql` version; inserts into core tables
+  include required NOT NULL columns; columns present in only some versions
+  are listed; the report in `docs/core_tables_used.txt` lists every core
+  table and column the code uses. (Skipped when `docs/core_schema/` has no
+  SQL files.)
+- **W6S**: a column assigned a variable that names a *different* column of
+  the same table (possible swap, e.g. `sbp_day` getting `$sbpNight`) is an
+  ERROR; the plain camelCase naming note is INFO only (see `--verbose`).
 - **UNRESOLVED / UNPARSED** (WARN level, listed under "Not verified"): statements
   the checker cannot resolve statically (e.g. OpenEMR core tables such as
   `list_options`/`documents`, which are not part of this module's schema files).

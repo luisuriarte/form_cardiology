@@ -70,13 +70,13 @@ $study['batch_date_formatted'] = \OpenEMR\Forms\Cardiology\CardPrintReport::form
 
 
 // ---- Holter-specific fields ----
-$recordingDate = $study['recording_date'] ?? '';
-$recordTime    = $study['record_time'] ?? '';
-$totalHours    = (int)($study['total_hours'] ?? 24);
-$averageHeartRate = (int)($study['average_heart_rate'] ?? 0);
-$minHeartRate   = (int)($study['min_heart_rate'] ?? 0);
-$maxHeartRate   = (int)($study['max_heart_rate'] ?? 0);
- $arrhythmiaCount = (int)($study['arrhythmia_count'] ?? 0);
+$recordingDate = $study['study_date'] ?? '';
+$recordTime    = $study['hr_min_time'] ?? '';
+$totalHours    = $study['recording_hours'] ?? null;
+$averageHeartRate = $study['hr_mean_bpm'] ?? null;
+$minHeartRate   = $study['hr_min_bpm'] ?? null;
+$maxHeartRate   = $study['hr_max_bpm'] ?? null;
+$arrhythmiaCount = $study['pvc_total'] ?? null;
 $status        = $study['status'] ?? '';
 
 // ---- Build HTML for Dompdf ----
@@ -271,25 +271,25 @@ ob_start();
         </tr>
         <tr>
             <td class="label"><?= xlt('Recording Date') ?>:</td>
-            <td class="val"><?= htmlspecialchars($recordingDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($recordingDate) : '--/--/----') ?></td>
+            <td class="val"><?= htmlspecialchars($recordingDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($recordingDate) : '—') ?></td>
             <td class="label"><?= xlt('Recording Time') ?>:</td>
-            <td class="val"><?= htmlspecialchars($recordTime ?? '') ?></td>
+            <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($recordTime)) ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('Total Recording Hours') ?>:</td>
-            <td class="val"><?= htmlspecialchars($totalHours) ?> h</td>
+            <td class="val"><?= $totalHours !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($totalHours)) . ' h' : '—' ?></td>
             <td class="label"><?= xlt('Average Heart Rate') ?>:</td>
-            <td class="val"><?= htmlspecialchars($averageHeartRate) ?> lpm</td>
+            <td class="val"><?= $averageHeartRate !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($averageHeartRate)) . ' lpm' : '—' ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('Min Heart Rate') ?>:</td>
-            <td class="val"><?= htmlspecialchars($minHeartRate) ?> lpm</td>
+            <td class="val"><?= $minHeartRate !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($minHeartRate)) . ' lpm' : '—' ?></td>
             <td class="label"><?= xlt('Max Heart Rate') ?>:</td>
-            <td class="val"><?= htmlspecialchars($maxHeartRate) ?> lpm</td>
+            <td class="val"><?= $maxHeartRate !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($maxHeartRate)) . ' lpm' : '—' ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('Arrhythmia Count') ?>:</td>
-            <td class="val"><?= htmlspecialchars($arrhythmiaCount) ?> episodes</td>
+            <td class="val"><?= $arrhythmiaCount !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($arrhythmiaCount)) . ' episodes' : '—' ?></td>
             <td class="label"><?= xlt('Status') ?>:</td>
             <td class="val" colspan="2"><?= htmlspecialchars(ucfirst($status)) ?></td>
         </tr>

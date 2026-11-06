@@ -70,12 +70,12 @@ $study['batch_date_formatted'] = \OpenEMR\Forms\Cardiology\CardPrintReport::form
 
 
 // ---- ABPM-specific fields ----
-$recordingDate = $study['recording_date'] ?? '';
-$recordTime    = $study['record_time'] ?? '';
-$monitorHours  = (int)($study['monitor_hours'] ?? 24);
-$meanSbp       = (float)($study['mean_sbp'] ?? 0);
-$meanDbp       = (float)($study['mean_dbp'] ?? 0);
-$heartRate     = (int)($study['heart_rate'] ?? 0);
+$recordingDate = $study['study_date'] ?? '';
+$recordTime    = $study['day_start_time'] ?? '';
+$monitorHours  = $study['recording_hours'] ?? null;
+$meanSbp       = $study['sbp_24h'] ?? null;
+$meanDbp       = $study['dbp_24h'] ?? null;
+$heartRate     = $study['hr_24h'] ?? null;
 $status        = $study['status'] ?? '';
 
 // ---- Build HTML for Dompdf ----
@@ -270,21 +270,21 @@ ob_start();
         </tr>
         <tr>
             <td class="label"><?= xlt('Recording Date') ?>:</td>
-            <td class="val"><?= htmlspecialchars($recordingDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($recordingDate) : '--/--/----') ?></td>
+            <td class="val"><?= htmlspecialchars($recordingDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($recordingDate) : '—') ?></td>
             <td class="label"><?= xlt('Recording Time') ?>:</td>
-            <td class="val"><?= htmlspecialchars($recordTime ?? '') ?></td>
+            <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($recordTime)) ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('Monitor Hours') ?>:</td>
-            <td class="val"><?= htmlspecialchars($monitorHours) ?> h</td>
+            <td class="val"><?= $monitorHours !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($monitorHours)) . ' h' : '—' ?></td>
             <td class="label"><?= xlt('Mean SBP') ?>:</td>
-            <td class="val"><?= number_format($meanSbp, 1) ?> mmHg</td>
+            <td class="val"><?= $meanSbp !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($meanSbp)) . ' mmHg' : '—' ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('Mean DBP') ?>:</td>
-            <td class="val"><?= number_format($meanDbp, 1) ?> mmHg</td>
+            <td class="val"><?= $meanDbp !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($meanDbp)) . ' mmHg' : '—' ?></td>
             <td class="label"><?= xlt('Heart Rate') ?>:</td>
-            <td class="val"><?= htmlspecialchars($heartRate) ?> lpm</td>
+            <td class="val"><?= $heartRate !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($heartRate)) . ' lpm' : '—' ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('Status') ?>:</td>

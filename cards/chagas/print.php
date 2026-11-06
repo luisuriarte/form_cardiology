@@ -100,11 +100,11 @@ function chagasListLabel(string $listId, ?string $optionId): string
 }
 
 // ---- Chagas-specific fields ----
-$phase = $study['phase'] ?? '';
-$stage = $study['stage'] ?? '';
-$findings = $study['findings'] ?? '';
-$tx = $study['treatment'] ?? '';
-$lastFollowup = $study['last_followup'] ?? '';
+$phase = $study['disease_phase'] ?? '';
+$stage = $study['kuschnir_stage'] ?? '';
+$findings = $study['ecg_findings'] ?? '';
+$tx = $study['treatment_note'] ?? '';
+$lastFollowup = $study['next_control_date'] ?? '';
 
 // ---- Build HTML for Dompdf ----
 ob_start();
@@ -299,7 +299,7 @@ ob_start();
         </tr>
         <tr>
             <td class="label"><?= xlt('Requesting Physician') ?>:</td>
-            <td class="val" colspan="3"><?= htmlspecialchars($study['requesting_physician'] ?? xlt('Service Physicians')) ?></td>
+            <td class="val" colspan="3"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::userDisplayName((string)($printEncounter['provider_username'] ?? ''), $printEncounter['provider_id'] ?? null) ?: xlt('Service Physicians')) ?></td>
         </tr>
     </table>
 
@@ -316,7 +316,7 @@ ob_start();
 
     <div class="section-title"><?= xlt('Findings') ?></div>
     <div class="report-text">
-        <?= nl2br(htmlspecialchars($findings)) ?>
+        <?= $findings !== '' ? nl2br(htmlspecialchars($findings)) : '—' ?>
     </div>
 
     <?php if ($tx): ?>

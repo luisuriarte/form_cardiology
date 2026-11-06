@@ -70,11 +70,9 @@ $study['batch_date_formatted'] = \OpenEMR\Forms\Cardiology\CardPrintReport::form
 
 
 // ---- Fitness-specific fields ----
-$assessmentDate = $study['assessment_date'] ?? '';
-$maxMet         = (int)($study['max_mets'] ?? 0);
-$restingHeartRate = (int)($study['resting_heart_rate'] ?? 0);
-$peakHeartRate   = (int)($study['peak_heart_rate'] ?? 0);
-$bodyMassIndex   = (float)($study['body_mass_index'] ?? 0);
+$assessmentDate = $study['study_date'] ?? '';
+$restingHeartRate = $study['heart_rate_bpm'] ?? null;
+$bodyMassIndex   = $study['bmi'] ?? null;
 $status        = $study['status'] ?? '';
 
 // ---- Build HTML for Dompdf ----
@@ -269,19 +267,13 @@ ob_start();
         </tr>
         <tr>
             <td class="label"><?= xlt('Assessment Date') ?>:</td>
-            <td class="val"><?= htmlspecialchars($assessmentDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($assessmentDate) : '--/--/----') ?></td>
-            <td class="label"><?= xlt('Max METs') ?>:</td>
-            <td class="val"><?= htmlspecialchars($maxMet) ?></td>
-        </tr>
-        <tr>
+            <td class="val"><?= htmlspecialchars($assessmentDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($assessmentDate) : '—') ?></td>
             <td class="label"><?= xlt('Resting Heart Rate') ?>:</td>
-            <td class="val"><?= htmlspecialchars($restingHeartRate) ?> lpm</td>
-            <td class="label"><?= xlt('Peak Heart Rate') ?>:</td>
-            <td class="val"><?= htmlspecialchars($peakHeartRate) ?> lpm</td>
+            <td class="val"><?= $restingHeartRate !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($restingHeartRate)) . ' lpm' : '—' ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('Body Mass Index') ?>:</td>
-            <td class="val"><?= number_format($bodyMassIndex, 1) ?></td>
+            <td class="val"><?= $bodyMassIndex !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($bodyMassIndex)) : '—' ?></td>
             <td class="label"><?= xlt('Status') ?>:</td>
             <td class="val" colspan="2"><?= htmlspecialchars(ucfirst($status)) ?></td>
         </tr>

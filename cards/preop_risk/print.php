@@ -70,12 +70,11 @@ $study['batch_date_formatted'] = \OpenEMR\Forms\Cardiology\CardPrintReport::form
 
 
 // ---- Preop Risk-specific fields ----
-$assessmentDate = $study['assessment_date'] ?? '';
+$assessmentDate = $study['study_date'] ?? '';
 $asaClass       = $study['asa_class'] ?? '';
-$procedure      = $study['procedure'] ?? '';
-$anesthesiaType = $study['anesthesia_type'] ?? '';
-$riskFactors    = $study['risk_factors'] ?? '';
-$functionalCapacity = (int)($study['functional_capacity'] ?? 0);
+$procedure      = $study['surgery_description'] ?? '';
+$riskFactors    = $study['lee_class'] ?? '';
+$functionalCapacity = $study['functional_capacity'] ?? null;
 $status        = $study['status'] ?? '';
 
 // ---- Build HTML for Dompdf ----
@@ -270,25 +269,21 @@ ob_start();
         </tr>
         <tr>
             <td class="label"><?= xlt('Assessment Date') ?>:</td>
-            <td class="val"><?= htmlspecialchars($assessmentDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($assessmentDate) : '--/--/----') ?></td>
+            <td class="val"><?= htmlspecialchars($assessmentDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($assessmentDate) : '—') ?></td>
             <td class="label"><?= xlt('ASA Class') ?>:</td>
             <td class="val"><?= htmlspecialchars($asaClass) ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('Procedure') ?>:</td>
-            <td class="val" colspan="3"><?= htmlspecialchars($procedure) ?></td>
+            <td class="val" colspan="3"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($procedure)) ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Anesthesia Type') ?>:</td>
-            <td class="val" colspan="3"><?= htmlspecialchars($anesthesiaType) ?></td>
-        </tr>
-        <tr>
-            <td class="label"><?= xlt('Risk Factors') ?>:</td>
-            <td class="val" colspan="3"><?= htmlspecialchars($riskFactors) ?></td>
+            <td class="label"><?= xlt('Lee RCRI Class') ?>:</td>
+            <td class="val" colspan="3"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($riskFactors)) ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('Functional Capacity') ?>:</td>
-            <td class="val"><?= htmlspecialchars($functionalCapacity) ?> METs</td>
+            <td class="val"><?= htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($functionalCapacity, 'card_functional_capacity')) ?></td>
             <td class="label"><?= xlt('Status') ?>:</td>
             <td class="val" colspan="2"><?= htmlspecialchars(ucfirst($status)) ?></td>
         </tr>

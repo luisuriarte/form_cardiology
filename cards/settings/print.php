@@ -270,7 +270,7 @@ ob_start();
             <td class="label"><?= xlt('Updated By') ?>:</td>
             <td class="val"><?= htmlspecialchars($updatedBy) ?></td>
             <td class="label"><?= xlt('Updated At') ?>:</td>
-            <td class="val"><?= htmlspecialchars($updatedAt ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($updatedAt) : '--:--') ?></td>
+            <td class="val"><?= htmlspecialchars($updatedAt ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($updatedAt) : '—') ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('Status') ?>:</td>

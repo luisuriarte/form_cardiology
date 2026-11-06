@@ -70,12 +70,9 @@ $study['batch_date_formatted'] = \OpenEMR\Forms\Cardiology\CardPrintReport::form
 
 
 // ---- ECG-specific fields ----
-$ecgDate     = $study['ecg_date']     ?? '';
-$leadI       = $study['lead_i']       ?? '';
-$leadII       = $study['lead_ii']      ?? '';
-$leadV5       = $study['lead_v5']      ?? '';
-$qTInterval  = (float)($study['qt_interval']  ?? 0);
-$qRSComplex   = $study['qrs_complex']   ?? '';
+$ecgDate     = $study['study_date']     ?? '';
+$qTInterval  = $study['qt_ms']  ?? null;
+$qRSComplex   = $study['qrs_ms']   ?? null;
 $rhythm      = $study['rhythm']       ?? '';
 $status      = $study['status']       ?? '';
 
@@ -271,25 +268,17 @@ ob_start();
         </tr>
         <tr>
             <td class="label"><?= xlt('ECG Date') ?>:</td>
-            <td class="val"><?= htmlspecialchars($ecgDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($ecgDate) : '--/--/----') ?></td>
+            <td class="val"><?= htmlspecialchars($ecgDate ? \OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($ecgDate) : '—') ?></td>
             <td class="label"><?= xlt('Rhythm') ?>:</td>
             <td class="val"><?= htmlspecialchars($rhythm) ?></td>
         </tr>
         <tr>
-            <td class="label"><?= xlt('Lead II') ?>:</td>
-            <td class="val" colspan="3"><?= htmlspecialchars(leadII) ?></td>
-        </tr>
-        <tr>
-            <td class="label"><?= xlt('Lead V5') ?>:</td>
-            <td class="val" colspan="3"><?= htmlspecialchars(leadV5) ?></td>
-        </tr>
-        <tr>
             <td class="label"><?= xlt('QRS Complex') ?>:</td>
-            <td class="val" colspan="3"><?= htmlspecialchars($qRSComplex) ?></td>
+            <td class="val" colspan="3"><?= $qRSComplex !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($qRSComplex)) . ' ms' : '—' ?></td>
         </tr>
         <tr>
             <td class="label"><?= xlt('QT Interval') ?>:</td>
-            <td class="val"><?= number_format($qTInterval, 2) ?> ms</td>
+            <td class="val"><?= $qTInterval !== null ? htmlspecialchars(\OpenEMR\Forms\Cardiology\CardPrintReport::formatValue($qTInterval)) . ' ms' : '—' ?></td>
             <td class="label"><?= xlt('Status') ?>:</td>
             <td class="val" colspan="2"><?= htmlspecialchars(ucfirst($status)) ?></td>
         </tr>
