@@ -830,6 +830,9 @@ final class SchemaChecker
         }
         $cols = array_map(static fn($c) => trim(trim($c, " \t`"), " \t\r\n"), explode(',', $m[1]));
         $valuesPart = trim($m[2]);
+        if (str_ends_with($valuesPart, ';')) {
+            $valuesPart = trim(substr($valuesPart, 0, -1));
+        }
         $rowsRaw = self::splitValueTuples($valuesPart);
         if ($rowsRaw === null) {
             return null;
